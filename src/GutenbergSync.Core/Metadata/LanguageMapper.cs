@@ -113,7 +113,7 @@ public sealed class LanguageMapper : ILanguageMapper
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenDictionary<string, string> IsoToName = NameToIso
-        .Where(kvp => kvp.Key.Length == 2 || kvp.Key.Length == 3) // Only ISO codes
+        .Where(kvp => kvp.Key.Length > 3) // Only language names (exclude ISO code entries like "en" = "en")
         .ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
         .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
