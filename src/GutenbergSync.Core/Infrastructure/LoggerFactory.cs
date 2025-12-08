@@ -17,8 +17,6 @@ public sealed class LoggerFactory : ILoggerFactory
         var loggerConfig = new LoggerConfiguration()
             .MinimumLevel.Is(logLevel)
             .Enrich.FromLogContext()
-            .Enrich.WithMachineName()
-            .Enrich.WithThreadId()
             .WriteTo.Console(
                 outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}");
 
