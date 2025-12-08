@@ -37,6 +37,11 @@ public sealed record SyncOrchestrationResult
 public sealed record MetadataSyncResult
 {
     /// <summary>
+    /// Whether the metadata sync was successful
+    /// </summary>
+    public bool Success { get; init; }
+
+    /// <summary>
     /// Number of RDF files synced
     /// </summary>
     public int RdfFilesSynced { get; init; }
@@ -50,6 +55,11 @@ public sealed record MetadataSyncResult
     /// Duration of metadata sync
     /// </summary>
     public TimeSpan Duration { get; init; }
+
+    /// <summary>
+    /// Error message if sync failed
+    /// </summary>
+    public string? ErrorMessage { get; init; }
 }
 
 /// <summary>
