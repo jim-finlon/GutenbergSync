@@ -97,9 +97,11 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
         try
         {
-            // Sync RDF files from cache/epub directories
-            var rdfEndpoint = "aleph.gutenberg.org::gutenberg-epub/cache/epub";
-            var rdfTargetDir = Path.Combine(options.TargetDirectory, "cache", "epub");
+            // Sync RDF files from gutenberg-epub module
+            // RDF files are in each book's directory (e.g., 1/pg1.rdf, 2/pg2.rdf)
+            // We sync the entire gutenberg-epub module and filter for .rdf files
+            var rdfEndpoint = "aleph.gutenberg.org::gutenberg-epub/";
+            var rdfTargetDir = Path.Combine(options.TargetDirectory, "gutenberg-epub");
 
             var rsyncOptions = new RsyncOptions
             {
