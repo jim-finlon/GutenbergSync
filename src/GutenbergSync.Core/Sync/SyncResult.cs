@@ -34,5 +34,10 @@ public sealed record SyncResult
     /// Duration of the sync operation
     /// </summary>
     public TimeSpan Duration { get; init; }
+
+    /// <summary>
+    /// Whether the operation was cancelled (vs. failed due to error)
+    /// </summary>
+    public bool WasCancelled { get; init; }
 }
 

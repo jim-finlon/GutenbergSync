@@ -94,17 +94,46 @@ public sealed class RsyncService : IRsyncService
                 }
             }, cts.Token);
 
-            await process.WaitForExitAsync(cts.Token);
-            await progressTask;
+            try
+            {
+                await process.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Kill the rsync process if cancelled
+                try
+                {
+                    if (!process.HasExited)
+                    {
+                        process.Kill();
+                        await process.WaitForExitAsync();
+                    }
+                }
+                catch
+                {
+                    // Ignore errors killing the process
+                }
+                throw;
+            }
+            finally
+            {
+                await progressTask;
+            }
+
+            // Extract stats from progress (if available)
+            var finalProgress = new SyncProgress();
+            // Note: Progress stats would need to be captured from ParseProgressAsync
+            // For now, we'll rely on rsync's exit code and error messages
 
             var result = new SyncResult
             {
                 Success = process.ExitCode == 0,
                 ExitCode = process.ExitCode,
                 ErrorMessage = process.ExitCode != 0
-                    ? await process.StandardError.ReadToEndAsync(cts.Token)
+                    ? await process.StandardError.ReadToEndAsync()
                     : null,
-                Duration = DateTime.UtcNow - startTime
+                Duration = DateTime.UtcNow - startTime,
+                WasCancelled = false // Set by catch block if cancelled
             };
 
             if (result.Success)
@@ -120,13 +149,14 @@ public sealed class RsyncService : IRsyncService
         }
         catch (OperationCanceledException)
         {
-            _logger.Warning("Rsync operation was cancelled");
+            _logger.Information("Rsync operation was cancelled - partial files preserved for resume");
             return new SyncResult
             {
                 Success = false,
                 ExitCode = -1,
-                ErrorMessage = "Operation was cancelled or timed out",
-                Duration = DateTime.UtcNow - startTime
+                ErrorMessage = "Operation was cancelled. Run the same command again to resume.",
+                Duration = DateTime.UtcNow - startTime,
+                WasCancelled = true
             };
         }
         catch (Exception ex)
@@ -276,21 +306,24 @@ public sealed class RsyncService : IRsyncService
         IProgress<SyncProgress> progress,
         CancellationToken cancellationToken)
     {
+        // Regex to match rsync progress lines
+        // Format: "1234567  45%  1.23MB/s    0:00:05  filename.txt"
         var progressRegex = new Regex(
-            @"(\d+)\s+(\d+%)\s+([\d.]+[KMGT]?B/s)\s+(\d+:\d+:\d+)\s+(.+)",
+            @"(\d+)\s+(\d+)%\s+([\d.]+[KMGT]?B/s)\s+(\d+:\d+:\d+)\s+(.+)",
             RegexOptions.Compiled);
 
         long totalBytes = 0;
         long bytesTransferred = 0;
         long filesTransferred = 0;
+        var startTime = DateTime.UtcNow;
 
         while (!process.HasExited && !cancellationToken.IsCancellationRequested)
         {
-            var line = await process.StandardOutput.ReadLineAsync();
+            var line = await process.StandardOutput.ReadLineAsync(cancellationToken);
             if (line == null)
                 break;
 
-            // Parse progress line: "1234567  45%  1.23MB/s    0:00:05  filename.txt"
+            // Parse progress line
             var match = progressRegex.Match(line);
             if (match.Success)
             {
@@ -300,11 +333,17 @@ public sealed class RsyncService : IRsyncService
                 }
 
                 var currentFile = match.Groups[5].Value.Trim();
+                var elapsed = DateTime.UtcNow - startTime;
+                
                 progress.Report(new SyncProgress
                 {
                     BytesTransferred = bytesTransferred,
+                    TotalBytes = totalBytes,
                     CurrentFile = currentFile,
-                    FilesTransferred = filesTransferred++
+                    FilesTransferred = filesTransferred++,
+                    SpeedBytesPerSecond = elapsed.TotalSeconds > 0 
+                        ? (long)(bytesTransferred / elapsed.TotalSeconds) 
+                        : null
                 });
             }
             else if (line.Contains("total size is"))
@@ -319,6 +358,15 @@ public sealed class RsyncService : IRsyncService
                         BytesTransferred = bytesTransferred
                     });
                 }
+            }
+            else if (line.StartsWith("receiving file list") || line.Contains("files to consider"))
+            {
+                // Initial phase - rsync is building file list
+                progress.Report(new SyncProgress
+                {
+                    CurrentFile = "Building file list...",
+                    FilesTransferred = 0
+                });
             }
         }
     }

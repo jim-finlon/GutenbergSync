@@ -111,19 +111,35 @@ public sealed class SyncCommand
                     
                     if (result.MetadataSync != null)
                     {
-                        AnsiConsole.MarkupLine($"[green]  Metadata:[/] {result.MetadataSync.RecordsAdded} records added");
+                        AnsiConsole.MarkupLine($"[green]  Metadata:[/] {result.MetadataSync.RecordsAdded} records added from {result.MetadataSync.RdfFilesSynced} RDF files");
                     }
                     
                     if (result.ContentSync != null)
                     {
                         AnsiConsole.MarkupLine($"[green]  Content:[/] {result.ContentSync.FilesSynced} files, {result.ContentSync.BytesTransferred:N0} bytes");
                     }
+                    
+                    AnsiConsole.MarkupLine($"[dim]  Duration: {result.Duration.TotalMinutes:F1} minutes[/]");
                 }
                 else
                 {
-                    logger.Error("Sync operation failed: {Error}", result.ErrorMessage);
-                    AnsiConsole.MarkupLine($"[red]✗ Sync operation failed: {result.ErrorMessage}[/]");
-                    Environment.ExitCode = 1;
+                    // Check if it was cancelled vs. actual error
+                    var isCancelled = result.ErrorMessage?.Contains("cancelled") == true || 
+                                     result.ErrorMessage?.Contains("resume") == true;
+                    
+                    if (isCancelled)
+                    {
+                        logger.Information("Sync operation was cancelled: {Error}", result.ErrorMessage);
+                        AnsiConsole.MarkupLine($"[yellow]⚠ Sync was cancelled[/]");
+                        AnsiConsole.MarkupLine($"[cyan]  {result.ErrorMessage}[/]");
+                        AnsiConsole.MarkupLine("[dim]  Partial files preserved. Run the same command again to resume.[/]");
+                    }
+                    else
+                    {
+                        logger.Error("Sync operation failed: {Error}", result.ErrorMessage);
+                        AnsiConsole.MarkupLine($"[red]✗ Sync operation failed: {result.ErrorMessage}[/]");
+                        Environment.ExitCode = 1;
+                    }
                 }
             }
             catch (Exception ex)

@@ -51,12 +51,24 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
             if (!metadataResult.Success)
             {
+                // If cancelled, provide helpful message
+                if (syncResult.WasCancelled)
+                {
+                    return new SyncOrchestrationResult
+                    {
+                        Success = false,
+                        MetadataSync = metadataResult,
+                        Duration = DateTime.UtcNow - startTime,
+                        ErrorMessage = "Sync was cancelled. Run the same command again to resume from where it stopped."
+                    };
+                }
+
                 return new SyncOrchestrationResult
                 {
                     Success = false,
                     MetadataSync = metadataResult,
                     Duration = DateTime.UtcNow - startTime,
-                    ErrorMessage = "Metadata sync failed"
+                    ErrorMessage = metadataResult.ErrorMessage ?? "Metadata sync failed"
                 };
             }
 
@@ -105,9 +117,10 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
             var rsyncOptions = new RsyncOptions
             {
-                Include = new[] { "*.rdf" },
+                Include = new[] { "*/", "*.rdf" }, // Include directories and RDF files
                 DryRun = options.DryRun,
-                ShowProgress = true
+                ShowProgress = true,
+                TimeoutSeconds = 3600 // 1 hour timeout for metadata sync (can be large)
             };
 
             progress?.Report(new SyncOrchestrationProgress
@@ -126,6 +139,20 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
             if (!syncResult.Success)
             {
+                // If cancelled, this is expected - user can resume
+                if (syncResult.WasCancelled)
+                {
+                    _logger.Information("Metadata sync cancelled. Partial files preserved. Run again to resume.");
+                    return new MetadataSyncResult
+                    {
+                        Success = false,
+                        RdfFilesSynced = (int)syncResult.FilesTransferred,
+                        RecordsAdded = 0,
+                        Duration = DateTime.UtcNow - startTime,
+                        ErrorMessage = "Sync was cancelled. Run the same command again to resume."
+                    };
+                }
+
                 return new MetadataSyncResult
                 {
                     Success = false,
@@ -145,10 +172,34 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             });
 
             var recordsAdded = 0;
+            var totalRdfFiles = Directory.Exists(rdfTargetDir) 
+                ? Directory.EnumerateFiles(rdfTargetDir, "*.rdf", SearchOption.AllDirectories).Count() 
+                : 0;
+            var processedFiles = 0;
+
+            if (totalRdfFiles > 0)
+            {
+                _logger.Information("Found {Count} RDF files to parse", totalRdfFiles);
+            }
+
+            // RDF files are in subdirectories like 1/pg1.rdf, 2/pg2.rdf, etc.
+            // ParseDirectoryAsync will recursively search for .rdf files
             await foreach (var metadata in _rdfParser.ParseDirectoryAsync(rdfTargetDir, cancellationToken))
             {
                 await _catalogRepository.UpsertAsync(metadata, cancellationToken);
                 recordsAdded++;
+                processedFiles++;
+
+                // Update progress every 100 files
+                if (totalRdfFiles > 0 && processedFiles % 100 == 0)
+                {
+                    progress?.Report(new SyncOrchestrationProgress
+                    {
+                        Phase = "Metadata",
+                        Message = $"Parsing RDF files... {processedFiles}/{totalRdfFiles}",
+                        ProgressPercent = 50 + (processedFiles / (double)totalRdfFiles * 50)
+                    });
+                }
             }
 
             progress?.Report(new SyncOrchestrationProgress
