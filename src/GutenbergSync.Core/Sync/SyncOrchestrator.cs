@@ -180,7 +180,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
         }
     }
 
-    private async Task<ContentSyncResult> SyncContentAsync(
+    /// <inheritdoc/>
+    public async Task<ContentSyncResult> SyncContentAsync(
         SyncOrchestrationOptions options,
         IProgress<SyncOrchestrationProgress>? progress = null,
         CancellationToken cancellationToken = default)
