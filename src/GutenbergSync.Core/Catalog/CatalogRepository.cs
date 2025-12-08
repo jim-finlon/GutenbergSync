@@ -309,7 +309,10 @@ public sealed class CatalogRepository : ICatalogRepository
                 @"SELECT subject FROM ebook_subjects WHERE ebook_id = @BookId",
                 new { BookId = ebook.BookId });
 
-            var line = $"{ebook.BookId},\"{EscapeCsv(ebook.Title)}\",\"{EscapeCsv(ebook.Language ?? "")}\",\"{EscapeCsv(ebook.LanguageIsoCode ?? "")}\",\"{ebook.PublicationDate?.ToString("yyyy-MM-dd") ?? ""}\",\"{EscapeCsv(string.Join("; ", subjects))}\",\"{EscapeCsv(string.Join("; ", authors))}\",\"{EscapeCsv(ebook.Rights ?? "")}\",{ebook.DownloadCount ?? 0}";
+            var publicationDateStr = ebook.PublicationDate != null && DateOnly.TryParse(ebook.PublicationDate, out var pubDate) 
+                ? pubDate.ToString("yyyy-MM-dd") 
+                : "";
+            var line = $"{ebook.BookId},\"{EscapeCsv(ebook.Title)}\",\"{EscapeCsv(ebook.Language ?? "")}\",\"{EscapeCsv(ebook.LanguageIsoCode ?? "")}\",\"{publicationDateStr}\",\"{EscapeCsv(string.Join("; ", subjects))}\",\"{EscapeCsv(string.Join("; ", authors))}\",\"{EscapeCsv(ebook.Rights ?? "")}\",{ebook.DownloadCount ?? 0}";
             await writer.WriteLineAsync(line);
         }
 
