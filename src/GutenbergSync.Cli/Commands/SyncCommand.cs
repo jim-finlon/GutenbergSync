@@ -110,12 +110,19 @@ public sealed class SyncCommand
 
                         var progress = new Progress<SyncOrchestrationProgress>(p =>
                         {
+                            // Update progress on the current context (Spectre.Console handles thread safety)
                             if (p.Phase == "Metadata")
                             {
                                 metadataTask.Description = $"[cyan]Metadata:[/] {p.Message}";
                                 if (p.ProgressPercent.HasValue)
                                 {
+                                    metadataTask.IsIndeterminate = false;
                                     metadataTask.Value = p.ProgressPercent.Value;
+                                }
+                                else
+                                {
+                                    // Show indeterminate progress if no percentage available
+                                    metadataTask.IsIndeterminate = true;
                                 }
                             }
                             else if (p.Phase == "Content")
@@ -125,6 +132,10 @@ public sealed class SyncCommand
                                 if (p.ProgressPercent.HasValue)
                                 {
                                     contentTask.Value = p.ProgressPercent.Value;
+                                }
+                                else
+                                {
+                                    contentTask.IsIndeterminate = true;
                                 }
                             }
                         });

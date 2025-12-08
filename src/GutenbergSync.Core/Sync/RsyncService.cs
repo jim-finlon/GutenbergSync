@@ -320,11 +320,22 @@ public sealed class RsyncService : IRsyncService
 
         while (!process.HasExited && !cancellationToken.IsCancellationRequested)
         {
+            string? line;
             try
             {
-                var line = await process.StandardOutput.ReadLineAsync(cancellationToken);
+                line = await process.StandardOutput.ReadLineAsync(cancellationToken);
                 if (line == null)
                     break;
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception)
+            {
+                // Ignore read errors, continue
+                continue;
+            }
 
             // Parse progress line
             var match = progressRegex.Match(line);
@@ -402,14 +413,6 @@ public sealed class RsyncService : IRsyncService
                         BytesTransferred = 0
                     });
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception)
-            {
-                // Ignore parsing errors, continue reading
             }
         }
     }
