@@ -26,8 +26,10 @@ public static class ServiceCollectionExtensions
         // Metadata services
         services.AddSingleton<ILanguageMapper, LanguageMapper>();
 
+        // Sync services
+        services.AddScoped<IRsyncService, RsyncService>();
+
         // TODO: Add core services as they are implemented
-        // services.AddScoped<IRsyncService, RsyncService>();
         // services.AddScoped<IRdfParser, RdfParser>();
         // services.AddScoped<ICatalogRepository, CatalogRepository>();
         // services.AddScoped<ITextExtractor, TextExtractor>();
