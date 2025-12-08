@@ -10,9 +10,12 @@ When you restart a sync after a failure, rsync automatically:
 - This is rsync's default behavior - no re-downloading of completed files
 
 ### 2. **Partial File Resume**
-- **Resumes interrupted file transfers** using `--partial` and `--append-verify` flags
+- **Resumes interrupted file transfers** using `--partial` flag
 - `--partial`: Keeps partially transferred files instead of deleting them
-- `--append-verify`: Appends to existing partial files and verifies data integrity
+- rsync's **delta-transfer algorithm** automatically handles resume:
+  - Compares checksums of partial file with source
+  - Only transfers the missing portions
+  - More efficient than re-transferring entire files
 - Partial files are stored in `.rsync-partial/` directory
 - On resume, rsync **continues from where it left off** for partially downloaded files
 - Once complete, the partial file is moved to its final location
@@ -64,10 +67,10 @@ You can verify resume is working by:
 ### 6. **Technical Details**
 
 The rsync command includes:
-- `--archive` (-a): Preserves file attributes, enables incremental sync
+- `--archive` (-a): Preserves file attributes, enables incremental sync and delta-transfer
 - `--partial`: Keeps partial files instead of deleting them on interruption
 - `--partial-dir=.rsync-partial`: Stores partial files in hidden directory
-- `--append-verify`: Resumes partial files by appending (with data verification)
+- **Delta-transfer algorithm**: rsync's built-in smart resume (compares checksums, only transfers missing parts)
 
 These flags ensure:
 - ✅ No duplicate downloads of completed files
