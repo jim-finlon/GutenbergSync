@@ -102,5 +102,10 @@ public sealed record SyncOrchestrationProgress
     /// Progress percentage (0-100)
     /// </summary>
     public double? ProgressPercent { get; init; }
+
+    /// <summary>
+    /// Current file being processed (for display above progress bars)
+    /// </summary>
+    public string? CurrentFile { get; init; }
 }
 

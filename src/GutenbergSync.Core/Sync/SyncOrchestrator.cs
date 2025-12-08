@@ -166,7 +166,10 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                     {
                         Phase = "Metadata",
                         Message = message,
-                        ProgressPercent = percent >= 0 ? percent : null
+                        ProgressPercent = percent >= 0 ? percent : null,
+                        CurrentFile = p.CurrentFile != null && !p.CurrentFile.Contains("Building") && !p.CurrentFile.Contains("Scanning")
+                            ? Path.GetFileName(p.CurrentFile)
+                            : null
                     });
                 });
             }
@@ -333,7 +336,10 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                     {
                         Phase = "Content",
                         Message = message,
-                        ProgressPercent = percent >= 0 ? percent : null
+                        ProgressPercent = percent >= 0 ? percent : null,
+                        CurrentFile = p.CurrentFile != null && !p.CurrentFile.Contains("Building") && !p.CurrentFile.Contains("Scanning")
+                            ? Path.GetFileName(p.CurrentFile)
+                            : null
                     });
                 });
             }
@@ -383,7 +389,10 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                     {
                         Phase = "Content",
                         Message = message,
-                        ProgressPercent = percent >= 0 ? (50 + (percent * 0.5)) : null // EPUB sync is second half of content phase
+                        ProgressPercent = percent >= 0 ? (50 + (percent * 0.5)) : null, // EPUB sync is second half of content phase
+                        CurrentFile = p.CurrentFile != null && !p.CurrentFile.Contains("Building") && !p.CurrentFile.Contains("Scanning")
+                            ? Path.GetFileName(p.CurrentFile)
+                            : null
                     });
                 });
             }

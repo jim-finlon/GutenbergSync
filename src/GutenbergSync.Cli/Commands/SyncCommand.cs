@@ -118,24 +118,14 @@ public sealed class SyncCommand
                             // Update progress on the current context (Spectre.Console handles thread safety)
                             if (p.Phase == "Metadata")
                             {
-                                // Extract file name from message if present
-                                var message = p.Message;
-                                if (message.Contains("Downloading") && message.Contains("..."))
+                                // Display file name on separate line if available
+                                if (!string.IsNullOrWhiteSpace(p.CurrentFile) && p.CurrentFile != currentMetadataFile)
                                 {
-                                    var fileNameStart = message.IndexOf("Downloading") + 12;
-                                    var fileNameEnd = message.IndexOf("...", fileNameStart);
-                                    if (fileNameEnd > fileNameStart)
-                                    {
-                                        var fileName = message.Substring(fileNameStart, fileNameEnd - fileNameStart).Trim();
-                                        if (fileName != currentMetadataFile)
-                                        {
-                                            currentMetadataFile = fileName;
-                                            // Display file name on a separate line above progress bars
-                                            AnsiConsole.MarkupLine($"[dim]  → {fileName}[/]");
-                                        }
-                                    }
+                                    currentMetadataFile = p.CurrentFile;
+                                    AnsiConsole.MarkupLine($"[dim]  → {p.CurrentFile}[/]");
                                 }
                                 
+                                var message = p.Message;
                                 // Keep description short to avoid pushing bars around
                                 var shortMessage = message.Length > 50 ? message.Substring(0, 47) + "..." : message;
                                 metadataTask.Description = $"[cyan]Metadata:[/] {shortMessage}";
@@ -154,25 +144,15 @@ public sealed class SyncCommand
                             }
                             else if (p.Phase == "Content")
                             {
-                                // Extract file name from message if present
-                                var message = p.Message;
-                                if (message.Contains("Downloading") && message.Contains("..."))
+                                // Display file name on separate line if available
+                                if (!string.IsNullOrWhiteSpace(p.CurrentFile) && p.CurrentFile != currentContentFile)
                                 {
-                                    var fileNameStart = message.IndexOf("Downloading") + 12;
-                                    var fileNameEnd = message.IndexOf("...", fileNameStart);
-                                    if (fileNameEnd > fileNameStart)
-                                    {
-                                        var fileName = message.Substring(fileNameStart, fileNameEnd - fileNameStart).Trim();
-                                        if (fileName != currentContentFile)
-                                        {
-                                            currentContentFile = fileName;
-                                            // Display file name on a separate line above progress bars
-                                            AnsiConsole.MarkupLine($"[dim]  → {fileName}[/]");
-                                        }
-                                    }
+                                    currentContentFile = p.CurrentFile;
+                                    AnsiConsole.MarkupLine($"[dim]  → {p.CurrentFile}[/]");
                                 }
                                 
                                 contentTask.IsIndeterminate = false;
+                                var message = p.Message;
                                 // Keep description short to avoid pushing bars around
                                 var shortMessage = message.Length > 50 ? message.Substring(0, 47) + "..." : message;
                                 contentTask.Description = $"[cyan]Content:[/] {shortMessage}";
