@@ -277,42 +277,6 @@ public sealed class RsyncDiscoveryService : IRsyncDiscoveryService
         return null;
     }
 
-    private static async Task<string?> GetRsyncVersionFromWSLAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var processStartInfo = new ProcessStartInfo
-            {
-                FileName = "wsl",
-                Arguments = "rsync --version",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var process = Process.Start(processStartInfo);
-            if (process == null)
-                return null;
-
-            await process.WaitForExitAsync(cancellationToken);
-
-            if (process.ExitCode == 0)
-            {
-                var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-                // Extract version from first line (e.g., "rsync  version 3.2.7")
-                var firstLine = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                return firstLine?.Trim();
-            }
-        }
-        catch
-        {
-            // Ignore errors
-        }
-
-        return null;
-    }
-
     private static string GetLinuxInstallationInstructions() => @"
 Install rsync on Linux:
 
