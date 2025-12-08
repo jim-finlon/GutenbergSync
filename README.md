@@ -56,7 +56,7 @@ The application uses a **metadata-first synchronization strategy** that builds a
 
 ## Requirements
 
-- **.NET 8.0 LTS** or later
+- **.NET 9.0** or later
 - **rsync 3.0+** (auto-detected on Linux/macOS, WSL/Cygwin on Windows)
 - **Storage**: 
   - Text-only (zipped): 8-15GB
@@ -65,7 +65,7 @@ The application uses a **metadata-first synchronization strategy** that builds a
 
 ## Installation
 
-### Install .NET 8.0
+### Install .NET 9.0
 
 **Linux/macOS:**
 ```bash
@@ -73,7 +73,7 @@ The application uses a **metadata-first synchronization strategy** that builds a
 # Or use package manager:
 # Ubuntu/Debian
 wget https://dotnet.microsoft.com/download/dotnet/scripts/v1/dotnet-install.sh
-bash dotnet-install.sh --channel 8.0
+bash dotnet-install.sh --channel 9.0
 
 # macOS
 brew install --cask dotnet

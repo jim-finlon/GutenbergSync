@@ -149,7 +149,7 @@ Project Gutenberg explicitly supports and encourages mirroring via their [Mirror
 ### NFR-4: Compatibility
 | ID | Requirement | Target |
 |----|-------------|--------|
-| NFR-4.1 | .NET version | .NET 8.0+ (LTS) |
+| NFR-4.1 | .NET version | .NET 9.0+ |
 | NFR-4.2 | Cross-platform support | Windows, Linux, macOS |
 | NFR-4.3 | rsync availability | Auto-detect: Native Linux/macOS, WSL/Cygwin on Windows |
 | NFR-4.4 | rsync installation guidance | Provide platform-specific instructions when missing |
