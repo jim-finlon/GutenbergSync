@@ -1,0 +1,155 @@
+# Cursor Rules for GutenbergSync
+
+## Project Overview
+.NET 8.0 application for mirroring Project Gutenberg archive and creating RAG-ready chunks.
+
+## Technology Stack
+- Runtime: .NET 8.0 LTS
+- Language: C# 12
+- Database: SQLite (Microsoft.Data.Sqlite)
+- CLI: System.CommandLine, Spectre.Console
+- Logging: Serilog
+- DI: Microsoft.Extensions.DependencyInjection
+- Configuration: Microsoft.Extensions.Configuration
+
+## Project Structure
+```
+src/
+├── GutenbergSync.Cli/          # Console application
+│   ├── Commands/               # CLI command handlers
+│   └── Program.cs
+├── GutenbergSync.Core/         # Core library
+│   ├── Sync/                   # Synchronization services
+│   ├── Metadata/               # RDF parsing, language mapping
+│   ├── Extraction/             # Text extraction, chunking
+│   ├── Catalog/                # SQLite catalog repository
+│   ├── Configuration/          # Configuration models
+│   └── Infrastructure/         # Platform detection, rsync discovery
+└── GutenbergSync.Tests/        # Unit and integration tests
+```
+
+## Coding Standards
+
+### General
+- Use C# 12 features (records, primary constructors where appropriate)
+- All public APIs must have XML documentation
+- Prefer async/await for all I/O operations
+- Use nullable reference types
+- Follow .NET naming conventions
+
+### Interfaces
+- All services must have interfaces (IServiceName)
+- Interfaces should be in the same namespace as implementations
+- Use dependency injection for all service dependencies
+
+### Error Handling
+- Use exceptions for exceptional circumstances
+- Provide clear, actionable error messages
+- Log errors with appropriate levels (Error, Warning, Information)
+- Use Polly for retry policies on transient failures
+
+### Configuration
+- All configuration via JSON/YAML files
+- Environment variable overrides supported
+- Validate configuration on startup
+- Fail fast with clear error messages
+
+### Testing
+- Unit tests for all core services
+- Integration tests for workflows
+- Use xUnit for testing framework
+- Mock external dependencies (rsync, file system where appropriate)
+
+### Database
+- Use Dapper for data access
+- All database operations async
+- Use transactions for multi-step operations
+- Handle SQLite-specific features (WAL mode, etc.)
+
+### Logging
+- Use Serilog for structured logging
+- Log at appropriate levels:
+  - Error: Exceptions, failures
+  - Warning: Recoverable issues, retries
+  - Information: Important operations, milestones
+  - Debug: Detailed execution flow
+- Include context in log messages (book ID, file path, etc.)
+
+## Key Design Principles
+
+1. **Metadata-First**: Build catalog before syncing content
+2. **Incremental by Default**: Track state to avoid unnecessary work
+3. **Idempotent Operations**: Safe to re-run any operation
+4. **Configuration-Driven**: All behaviors configurable
+5. **Cross-Platform**: Abstract platform-specific details
+6. **Concurrent Safety**: Support concurrent operations with verification
+
+## Specific Guidelines
+
+### rsync Integration
+- Auto-detect rsync on all platforms
+- Provide installation instructions if missing
+- Parse rsync output for progress tracking
+- Handle Windows (WSL/Cygwin) specially
+
+### RDF Parsing
+- Handle missing/optional fields gracefully
+- Map language names to ISO codes
+- Store both language name and ISO code
+- Log warnings for parsing issues, continue processing
+
+### Text Extraction
+- Strip Gutenberg headers/footers
+- Normalize encoding to UTF-8
+- Support multiple formats (txt, zip, html)
+- Track extraction state for incremental processing
+
+### Catalog Database
+- Use SQLite with FTS5 for full-text search
+- Index commonly queried fields
+- Support both language names and ISO codes in queries
+- Track file verification status
+
+### Export Formats
+- JSON: Default, for RAG ingestion
+- Parquet: For analytics/ML pipelines
+- Arrow: For high-performance processing
+- Compressed: Gzip/brotli for JSON
+
+## File Naming
+- Interfaces: `IServiceName.cs`
+- Implementations: `ServiceName.cs`
+- Models: `ModelName.cs` or `ModelName.cs` (records)
+- Commands: `CommandNameCommand.cs`
+- Tests: `ServiceNameTests.cs`
+
+## Documentation
+- XML docs on all public APIs
+- README for user-facing documentation
+- Technical spec for architecture details
+- Inline comments for complex logic
+
+## Git Workflow
+- Main branch: Stable, production-ready code
+- Feature branches: `feature/component-name`
+- Commit messages: Clear, descriptive
+- Merge to main: After milestone completion
+
+## Dependencies
+- Keep dependencies up to date
+- Prefer Microsoft-maintained packages
+- Document why each dependency is needed
+- Minimize external dependencies where possible
+
+## Performance
+- Async I/O for all file/database operations
+- Parallel processing where safe (extraction)
+- Efficient database queries (indexes, prepared statements)
+- Progress reporting for long operations
+
+## Security
+- Validate all file paths
+- Sanitize user input
+- Handle file permissions gracefully
+- Don't expose sensitive data in logs
+
