@@ -178,4 +178,3 @@ public sealed class ConfigurationLoader : IConfigurationLoader
         }
     }
 }
-
