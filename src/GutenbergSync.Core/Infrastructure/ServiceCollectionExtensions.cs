@@ -33,8 +33,10 @@ public static class ServiceCollectionExtensions
         // Metadata services
         services.AddScoped<IRdfParser, RdfParser>();
 
+        // Catalog services
+        services.AddScoped<ICatalogRepository, CatalogRepository>();
+
         // TODO: Add core services as they are implemented
-        // services.AddScoped<ICatalogRepository, CatalogRepository>();
         // services.AddScoped<ITextExtractor, TextExtractor>();
         // services.AddScoped<IAuditService, AuditService>();
         // services.AddScoped<IDatabaseMaintenanceService, DatabaseMaintenanceService>();
