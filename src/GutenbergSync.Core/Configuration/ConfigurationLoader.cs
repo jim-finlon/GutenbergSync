@@ -72,7 +72,7 @@ public sealed class ConfigurationLoader : IConfigurationLoader
         }
 
         // Apply environment variable overrides
-        ApplyEnvironmentOverrides(config);
+        config = ApplyEnvironmentOverrides(config);
 
         return config;
     }
@@ -127,7 +127,7 @@ public sealed class ConfigurationLoader : IConfigurationLoader
         };
     }
 
-    private static void ApplyEnvironmentOverrides(AppConfiguration config)
+    private static AppConfiguration ApplyEnvironmentOverrides(AppConfiguration config)
     {
         // Sync configuration
         var targetDir = Environment.GetEnvironmentVariable("GUTENBERG_SYNC_TARGET_DIRECTORY");
@@ -176,5 +176,7 @@ public sealed class ConfigurationLoader : IConfigurationLoader
                 Logging = config.Logging with { FilePath = logPath }
             };
         }
+
+        return config;
     }
 }
