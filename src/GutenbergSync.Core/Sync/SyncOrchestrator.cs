@@ -133,9 +133,11 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             {
                 return new MetadataSyncResult
                 {
+                    Success = false,
                     RdfFilesSynced = 0,
                     RecordsAdded = 0,
-                    Duration = DateTime.UtcNow - startTime
+                    Duration = DateTime.UtcNow - startTime,
+                    ErrorMessage = syncResult.ErrorMessage
                 };
             }
 
@@ -165,6 +167,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
             return new MetadataSyncResult
             {
+                Success = true,
                 RdfFilesSynced = (int)syncResult.FilesTransferred,
                 RecordsAdded = recordsAdded,
                 Duration = DateTime.UtcNow - startTime
@@ -175,9 +178,11 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             _logger.Error(ex, "Metadata sync failed");
             return new MetadataSyncResult
             {
+                Success = false,
                 RdfFilesSynced = 0,
                 RecordsAdded = 0,
-                Duration = DateTime.UtcNow - startTime
+                Duration = DateTime.UtcNow - startTime,
+                ErrorMessage = ex.Message
             };
         }
     }
