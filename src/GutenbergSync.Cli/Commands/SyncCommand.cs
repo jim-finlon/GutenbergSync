@@ -90,19 +90,47 @@ public sealed class SyncCommand
                 logger.Information("Starting sync operation...");
                 AnsiConsole.MarkupLine("[green]Starting sync operation...[/]");
 
-                var progress = new Progress<SyncOrchestrationProgress>(p =>
-                {
-                    if (p.ProgressPercent.HasValue)
+                // Use Spectre.Console Progress for live updates
+                var result = await AnsiConsole.Progress()
+                    .AutoRefresh(true)
+                    .AutoClear(false)
+                    .HideCompleted(false)
+                    .Columns(new ProgressColumn[]
                     {
-                        AnsiConsole.MarkupLine($"[cyan]{p.Phase}:[/] {p.Message} ({p.ProgressPercent:F1}%)");
-                    }
-                    else
+                        new TaskDescriptionColumn(),
+                        new ProgressBarColumn(),
+                        new PercentageColumn(),
+                        new SpinnerColumn()
+                    })
+                    .StartAsync(async ctx =>
                     {
-                        AnsiConsole.MarkupLine($"[cyan]{p.Phase}:[/] {p.Message}");
-                    }
-                });
+                        var metadataTask = ctx.AddTask("[cyan]Metadata:[/] Syncing RDF files...", maxValue: 100);
+                        var contentTask = ctx.AddTask("[cyan]Content:[/] Syncing files...", maxValue: 100);
+                        contentTask.IsIndeterminate = true; // Hide until content sync starts
 
-                var result = await orchestrator.SyncAsync(options, progress);
+                        var progress = new Progress<SyncOrchestrationProgress>(p =>
+                        {
+                            if (p.Phase == "Metadata")
+                            {
+                                metadataTask.Description = $"[cyan]Metadata:[/] {p.Message}";
+                                if (p.ProgressPercent.HasValue)
+                                {
+                                    metadataTask.Value = p.ProgressPercent.Value;
+                                }
+                            }
+                            else if (p.Phase == "Content")
+                            {
+                                contentTask.IsIndeterminate = false;
+                                contentTask.Description = $"[cyan]Content:[/] {p.Message}";
+                                if (p.ProgressPercent.HasValue)
+                                {
+                                    contentTask.Value = p.ProgressPercent.Value;
+                                }
+                            }
+                        });
+
+                        return await orchestrator.SyncAsync(options, progress);
+                    });
 
                 if (result.Success)
                 {

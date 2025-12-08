@@ -124,11 +124,30 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 ProgressPercent = 0
             });
 
+            // Create progress handler for rsync that reports to orchestration progress
+            IProgress<SyncProgress>? rsyncProgress = null;
+            if (progress != null)
+            {
+                rsyncProgress = new Progress<SyncProgress>(p =>
+                {
+                    // Convert rsync progress to orchestration progress
+                    var percent = p.ProgressPercent ?? 0;
+                    progress.Report(new SyncOrchestrationProgress
+                    {
+                        Phase = "Metadata",
+                        Message = p.CurrentFile != null 
+                            ? $"Downloading {Path.GetFileName(p.CurrentFile)}... ({p.FilesTransferred} files)"
+                            : "Downloading RDF files...",
+                        ProgressPercent = percent
+                    });
+                });
+            }
+
             var syncResult = await _rsyncService.SyncAsync(
                 rdfEndpoint,
                 rdfTargetDir,
                 rsyncOptions,
-                null,
+                rsyncProgress,
                 cancellationToken);
 
             if (!syncResult.Success)
