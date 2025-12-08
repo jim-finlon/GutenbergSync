@@ -286,11 +286,38 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 ProgressPercent = 0
             });
 
+            // Create progress handler for main collection sync
+            IProgress<SyncProgress>? mainRsyncProgress = null;
+            if (progress != null)
+            {
+                mainRsyncProgress = new Progress<SyncProgress>(p =>
+                {
+                    var percent = p.ProgressPercent ?? 0;
+                    var message = p.CurrentFile != null 
+                        ? $"Downloading {Path.GetFileName(p.CurrentFile)}... ({p.FilesTransferred} files)"
+                        : "Syncing main collection files...";
+                    
+                    if (p.TotalBytes.HasValue && p.BytesTransferred > 0)
+                    {
+                        var mbTransferred = p.BytesTransferred / (1024.0 * 1024.0);
+                        var mbTotal = p.TotalBytes.Value / (1024.0 * 1024.0);
+                        message += $" ({mbTransferred:F1}/{mbTotal:F1} MB)";
+                    }
+                    
+                    progress.Report(new SyncOrchestrationProgress
+                    {
+                        Phase = "Content",
+                        Message = message,
+                        ProgressPercent = percent
+                    });
+                });
+            }
+
             var mainSyncResult = await _rsyncService.SyncAsync(
                 mainEndpoint,
                 mainTargetDir,
                 rsyncOptions,
-                null,
+                mainRsyncProgress,
                 cancellationToken);
 
             if (mainSyncResult.Success)
@@ -312,12 +339,39 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 var epubEndpoint = "aleph.gutenberg.org::gutenberg-epub";
                 var epubTargetDir = Path.Combine(options.TargetDirectory, "gutenberg-epub");
 
-                var epubSyncResult = await _rsyncService.SyncAsync(
-                    epubEndpoint,
-                    epubTargetDir,
-                    rsyncOptions,
-                    null,
-                    cancellationToken);
+            // Create progress handler for EPUB sync
+            IProgress<SyncProgress>? epubRsyncProgress = null;
+            if (progress != null)
+            {
+                epubRsyncProgress = new Progress<SyncProgress>(p =>
+                {
+                    var percent = p.ProgressPercent ?? 0;
+                    var message = p.CurrentFile != null 
+                        ? $"Downloading {Path.GetFileName(p.CurrentFile)}... ({p.FilesTransferred} files)"
+                        : "Syncing generated formats (EPUB, MOBI)...";
+                    
+                    if (p.TotalBytes.HasValue && p.BytesTransferred > 0)
+                    {
+                        var mbTransferred = p.BytesTransferred / (1024.0 * 1024.0);
+                        var mbTotal = p.TotalBytes.Value / (1024.0 * 1024.0);
+                        message += $" ({mbTransferred:F1}/{mbTotal:F1} MB)";
+                    }
+                    
+                    progress.Report(new SyncOrchestrationProgress
+                    {
+                        Phase = "Content",
+                        Message = message,
+                        ProgressPercent = 50 + (percent * 0.5) // EPUB sync is second half of content phase
+                    });
+                });
+            }
+
+            var epubSyncResult = await _rsyncService.SyncAsync(
+                epubEndpoint,
+                epubTargetDir,
+                rsyncOptions,
+                epubRsyncProgress,
+                cancellationToken);
 
                 if (epubSyncResult.Success)
                 {
