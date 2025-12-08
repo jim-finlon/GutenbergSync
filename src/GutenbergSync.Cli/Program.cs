@@ -20,7 +20,10 @@ internal class Program
         // Build service provider
         var services = new ServiceCollection();
         
-        // Load configuration first
+        // Add core services first (includes IConfigurationLoader)
+        services.AddGutenbergSyncCore();
+        
+        // Load configuration
         var tempProvider = services.BuildServiceProvider();
         var configLoader = tempProvider.GetRequiredService<IConfigurationLoader>();
         AppConfiguration config;
@@ -34,11 +37,9 @@ internal class Program
             config = configLoader.CreateDefault();
         }
 
-        // Register configuration
+        // Re-register configuration (override if needed)
+        services.Remove(services.FirstOrDefault(s => s.ServiceType == typeof(AppConfiguration)));
         services.AddSingleton(config);
-
-        // Add core services
-        services.AddGutenbergSyncCore();
 
         // Configure logging
         var loggerFactory = services.BuildServiceProvider().GetRequiredService<ILoggerFactory>();
