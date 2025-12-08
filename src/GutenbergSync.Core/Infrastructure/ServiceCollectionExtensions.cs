@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using GutenbergSync.Core.Configuration;
 using GutenbergSync.Core.Infrastructure;
 using GutenbergSync.Core.Metadata;
+using GutenbergSync.Core.Sync;
 
 namespace GutenbergSync.Core.Infrastructure;
 
