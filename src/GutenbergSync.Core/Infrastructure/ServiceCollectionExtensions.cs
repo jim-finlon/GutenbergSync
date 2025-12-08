@@ -22,10 +22,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRsyncDiscoveryService, RsyncDiscoveryService>();
         services.AddSingleton<ILoggerFactory, LoggerFactory>();
 
+        // Metadata services
+        services.AddSingleton<ILanguageMapper, LanguageMapper>();
+
         // TODO: Add core services as they are implemented
         // services.AddScoped<IRsyncService, RsyncService>();
         // services.AddScoped<IRdfParser, RdfParser>();
-        // services.AddScoped<ILanguageMapper, LanguageMapper>();
         // services.AddScoped<ICatalogRepository, CatalogRepository>();
         // services.AddScoped<ITextExtractor, TextExtractor>();
         // services.AddScoped<IAuditService, AuditService>();
