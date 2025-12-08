@@ -51,24 +51,18 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
             if (!metadataResult.Success)
             {
-                // If cancelled, provide helpful message
-                if (syncResult.WasCancelled)
-                {
-                    return new SyncOrchestrationResult
-                    {
-                        Success = false,
-                        MetadataSync = metadataResult,
-                        Duration = DateTime.UtcNow - startTime,
-                        ErrorMessage = "Sync was cancelled. Run the same command again to resume from where it stopped."
-                    };
-                }
+                // Check if it was cancelled based on error message
+                var wasCancelled = metadataResult.ErrorMessage?.Contains("cancelled") == true || 
+                                  metadataResult.ErrorMessage?.Contains("resume") == true;
 
                 return new SyncOrchestrationResult
                 {
                     Success = false,
                     MetadataSync = metadataResult,
                     Duration = DateTime.UtcNow - startTime,
-                    ErrorMessage = metadataResult.ErrorMessage ?? "Metadata sync failed"
+                    ErrorMessage = wasCancelled 
+                        ? "Sync was cancelled. Run the same command again to resume from where it stopped."
+                        : metadataResult.ErrorMessage ?? "Metadata sync failed"
                 };
             }
 
