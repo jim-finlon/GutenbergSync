@@ -17,14 +17,14 @@ public sealed class SyncCommand
         var command = new Command("sync", "Synchronize Project Gutenberg archive");
 
         var targetDirOption = new Option<string>(
-            "--target-dir",
+            aliases: new[] { "--target-dir", "-t" },
             description: "Target directory for archive storage")
         {
             IsRequired = false
         };
 
         var presetOption = new Option<string>(
-            "--preset",
+            aliases: new[] { "--preset", "-p" },
             description: "Content preset (text-only, text-epub, all-text, full)")
         {
             IsRequired = false

@@ -15,7 +15,7 @@ public sealed class ExtractCommand
         var command = new Command("extract", "Extract text from ebooks for RAG ingestion");
 
         var inputOption = new Option<string[]>(
-            "--input",
+            aliases: new[] { "--input", "-i" },
             description: "Input file(s) or directory to extract from")
         {
             IsRequired = true,
@@ -23,7 +23,7 @@ public sealed class ExtractCommand
         };
 
         var outputOption = new Option<string>(
-            "--output",
+            aliases: new[] { "--output", "-o" },
             description: "Output directory for extracted chunks")
         {
             IsRequired = true
