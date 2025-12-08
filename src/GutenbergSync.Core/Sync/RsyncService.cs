@@ -222,6 +222,7 @@ public sealed class RsyncService : IRsyncService
         args.Add("--human-readable"); // -h: human-readable sizes
         args.Add("--partial"); // Keep partial files for resume
         args.Add("--partial-dir=.rsync-partial"); // Store partial files in hidden directory
+        args.Add("--append-verify"); // Resume partial files by appending (with verification)
 
         if (options.ShowProgress && !listOnly)
         {
