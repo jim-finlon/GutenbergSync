@@ -57,6 +57,7 @@ internal class Program
         rootCommand.AddCommand(ExtractCommand.Create(serviceProvider));
         rootCommand.AddCommand(ConfigCommand.Create(serviceProvider));
         rootCommand.AddCommand(HealthCommand.Create(serviceProvider));
+        rootCommand.AddCommand(AuditCommand.Create(serviceProvider));
 
         return await rootCommand.InvokeAsync(args);
     }

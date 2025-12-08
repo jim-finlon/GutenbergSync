@@ -44,8 +44,10 @@ public static class ServiceCollectionExtensions
         // Sync orchestration
         services.AddScoped<ISyncOrchestrator, SyncOrchestrator>();
 
+        // Audit services
+        services.AddScoped<IAuditService, AuditService>();
+
         // TODO: Add core services as they are implemented
-        // services.AddScoped<IAuditService, AuditService>();
         // services.AddScoped<IDatabaseMaintenanceService, DatabaseMaintenanceService>();
 
         return services;
