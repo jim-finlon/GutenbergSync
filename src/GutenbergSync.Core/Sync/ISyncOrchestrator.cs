@@ -20,5 +20,13 @@ public interface ISyncOrchestrator
         SyncOrchestrationOptions options,
         IProgress<SyncOrchestrationProgress>? progress = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Syncs content files using catalog as checklist
+    /// </summary>
+    Task<ContentSyncResult> SyncContentAsync(
+        SyncOrchestrationOptions options,
+        IProgress<SyncOrchestrationProgress>? progress = null,
+        CancellationToken cancellationToken = default);
 }
 

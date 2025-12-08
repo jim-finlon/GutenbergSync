@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using GutenbergSync.Core.Configuration;
 using GutenbergSync.Core.Sync;
 using Serilog;
+using Spectre.Console;
 
 namespace GutenbergSync.Cli.Commands;
 
@@ -75,10 +76,55 @@ public sealed class SyncCommand
                     };
                 }
 
+                var orchestrator = serviceProvider.GetRequiredService<ISyncOrchestrator>();
+
+                var options = new SyncOrchestrationOptions
+                {
+                    TargetDirectory = config.Sync.TargetDirectory,
+                    Preset = preset ?? config.Sync.Preset,
+                    MetadataOnly = metadataOnly,
+                    VerifyAfterSync = verify,
+                    DryRun = dryRun
+                };
+
                 logger.Information("Starting sync operation...");
-                
-                // TODO: Implement sync orchestration
-                logger.Information("Sync operation completed");
+                AnsiConsole.MarkupLine("[green]Starting sync operation...[/]");
+
+                var progress = new Progress<SyncOrchestrationProgress>(p =>
+                {
+                    if (p.ProgressPercent.HasValue)
+                    {
+                        AnsiConsole.MarkupLine($"[cyan]{p.Phase}:[/] {p.Message} ({p.ProgressPercent:F1}%)");
+                    }
+                    else
+                    {
+                        AnsiConsole.MarkupLine($"[cyan]{p.Phase}:[/] {p.Message}");
+                    }
+                });
+
+                var result = await orchestrator.SyncAsync(options, progress);
+
+                if (result.Success)
+                {
+                    logger.Information("Sync operation completed successfully");
+                    AnsiConsole.MarkupLine("[green]✓ Sync operation completed successfully[/]");
+                    
+                    if (result.MetadataSync != null)
+                    {
+                        AnsiConsole.MarkupLine($"[green]  Metadata:[/] {result.MetadataSync.RecordsAdded} records added");
+                    }
+                    
+                    if (result.ContentSync != null)
+                    {
+                        AnsiConsole.MarkupLine($"[green]  Content:[/] {result.ContentSync.FilesSynced} files, {result.ContentSync.BytesTransferred:N0} bytes");
+                    }
+                }
+                else
+                {
+                    logger.Error("Sync operation failed: {Error}", result.ErrorMessage);
+                    AnsiConsole.MarkupLine($"[red]✗ Sync operation failed: {result.ErrorMessage}[/]");
+                    Environment.ExitCode = 1;
+                }
             }
             catch (Exception ex)
             {

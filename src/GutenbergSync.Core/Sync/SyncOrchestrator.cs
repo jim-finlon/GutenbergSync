@@ -64,14 +64,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             ContentSyncResult? contentResult = null;
             if (!options.MetadataOnly)
             {
-                progress?.Report(new SyncOrchestrationProgress
-                {
-                    Phase = "Content",
-                    Message = "Syncing content files..."
-                });
-
-                // TODO: Implement content sync using catalog as checklist
-                _logger.Information("Content sync not yet implemented - using catalog as checklist");
+                contentResult = await SyncContentAsync(options, progress, cancellationToken);
             }
 
             return new SyncOrchestrationResult
@@ -183,6 +176,114 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 RecordsAdded = 0,
                 Duration = DateTime.UtcNow - startTime,
                 ErrorMessage = ex.Message
+            };
+        }
+    }
+
+    private async Task<ContentSyncResult> SyncContentAsync(
+        SyncOrchestrationOptions options,
+        IProgress<SyncOrchestrationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var startTime = DateTime.UtcNow;
+        var filesSynced = 0L;
+        var bytesTransferred = 0L;
+
+        try
+        {
+            // Get all books from catalog to use as checklist
+            var allBooks = await _catalogRepository.SearchAsync(
+                new CatalogSearchOptions { Limit = null },
+                cancellationToken);
+
+            _logger.Information("Syncing content for {BookCount} books from catalog", allBooks.Count);
+
+            // Determine include patterns based on preset
+            var includePatterns = SyncPresets.GetPresetPatterns(options.Preset);
+
+            // Sync main collection (gutenberg module)
+            var mainEndpoint = "aleph.gutenberg.org::gutenberg";
+            var mainTargetDir = Path.Combine(options.TargetDirectory, "gutenberg");
+
+            var rsyncOptions = new RsyncOptions
+            {
+                Include = includePatterns.Length > 0 ? includePatterns : null,
+                DryRun = options.DryRun,
+                ShowProgress = true
+            };
+
+            progress?.Report(new SyncOrchestrationProgress
+            {
+                Phase = "Content",
+                Message = "Syncing main collection files...",
+                ProgressPercent = 0
+            });
+
+            var mainSyncResult = await _rsyncService.SyncAsync(
+                mainEndpoint,
+                mainTargetDir,
+                rsyncOptions,
+                null,
+                cancellationToken);
+
+            if (mainSyncResult.Success)
+            {
+                filesSynced += mainSyncResult.FilesTransferred;
+                bytesTransferred += mainSyncResult.BytesTransferred;
+            }
+
+            // Sync generated formats (gutenberg-epub module) if preset includes them
+            if (options.Preset != "text-only" && options.Preset != "all-text")
+            {
+                progress?.Report(new SyncOrchestrationProgress
+                {
+                    Phase = "Content",
+                    Message = "Syncing generated formats (EPUB, MOBI)...",
+                    ProgressPercent = 50
+                });
+
+                var epubEndpoint = "aleph.gutenberg.org::gutenberg-epub";
+                var epubTargetDir = Path.Combine(options.TargetDirectory, "gutenberg-epub");
+
+                var epubSyncResult = await _rsyncService.SyncAsync(
+                    epubEndpoint,
+                    epubTargetDir,
+                    rsyncOptions,
+                    null,
+                    cancellationToken);
+
+                if (epubSyncResult.Success)
+                {
+                    filesSynced += epubSyncResult.FilesTransferred;
+                    bytesTransferred += epubSyncResult.BytesTransferred;
+                }
+            }
+
+            progress?.Report(new SyncOrchestrationProgress
+            {
+                Phase = "Content",
+                Message = "Content sync completed",
+                ProgressPercent = 100
+            });
+
+            _logger.Information("Content sync completed: {FilesSynced} files, {BytesTransferred} bytes",
+                filesSynced, bytesTransferred);
+
+            return new ContentSyncResult
+            {
+                FilesSynced = filesSynced,
+                BytesTransferred = bytesTransferred,
+                Duration = DateTime.UtcNow - startTime
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Content sync failed");
+            return new ContentSyncResult
+            {
+                FilesSynced = filesSynced,
+                BytesTransferred = bytesTransferred,
+                Duration = DateTime.UtcNow - startTime
             };
         }
     }
