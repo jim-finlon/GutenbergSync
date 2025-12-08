@@ -37,8 +37,10 @@ public static class ServiceCollectionExtensions
         // Catalog services
         services.AddScoped<ICatalogRepository, CatalogRepository>();
 
+        // Extraction services
+        services.AddScoped<ITextExtractor, TextExtractor>();
+
         // TODO: Add core services as they are implemented
-        // services.AddScoped<ITextExtractor, TextExtractor>();
         // services.AddScoped<IAuditService, AuditService>();
         // services.AddScoped<IDatabaseMaintenanceService, DatabaseMaintenanceService>();
 
