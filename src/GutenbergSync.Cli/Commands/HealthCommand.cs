@@ -36,7 +36,10 @@ public sealed class HealthCommand
                 else
                 {
                     logger.Warning("✗ rsync is not available");
-                    logger.Information(rsyncResult.InstallationInstructions);
+                    if (!string.IsNullOrWhiteSpace(rsyncResult.InstallationInstructions))
+                    {
+                        logger.Information(rsyncResult.InstallationInstructions);
+                    }
                 }
 
                 // Check catalog

@@ -88,7 +88,9 @@ public sealed class AuditService : IAuditService
             {
                 await using var stream = File.OpenRead(filePath);
                 var buffer = new byte[1024];
-                await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+                var bytesRead = await stream.ReadAsync(buffer, cancellationToken);
+                // Verify we can read at least some data (or EOF is fine)
+                _ = bytesRead; // Acknowledge bytes read
             }
             catch (Exception ex)
             {

@@ -208,7 +208,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
 
             var rsyncOptions = new RsyncOptions
             {
-                Include = includePatterns.Length > 0 ? includePatterns : null,
+                Include = includePatterns.Length > 0 ? includePatterns : Array.Empty<string>(),
                 DryRun = options.DryRun,
                 ShowProgress = true
             };

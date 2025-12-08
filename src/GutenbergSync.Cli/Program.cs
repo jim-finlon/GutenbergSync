@@ -38,7 +38,11 @@ internal class Program
         }
 
         // Re-register configuration (override if needed)
-        services.Remove(services.FirstOrDefault(s => s.ServiceType == typeof(AppConfiguration)));
+        var existingConfig = services.FirstOrDefault(s => s.ServiceType == typeof(AppConfiguration));
+        if (existingConfig != null)
+        {
+            services.Remove(existingConfig);
+        }
         services.AddSingleton(config);
 
         // Configure logging

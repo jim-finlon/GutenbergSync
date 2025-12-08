@@ -177,7 +177,7 @@ public sealed class TextExtractor : ITextExtractor
     }
 
     /// <inheritdoc/>
-    public async Task<ExtractionPreview> PreviewExtractionAsync(
+    public Task<ExtractionPreview> PreviewExtractionAsync(
         IEnumerable<string> sourceFiles,
         TextExtractionOptions options,
         CancellationToken cancellationToken = default)
@@ -189,6 +189,9 @@ public sealed class TextExtractor : ITextExtractor
 
         foreach (var file in files)
         {
+            if (cancellationToken.IsCancellationRequested)
+                break;
+
             if (!File.Exists(file))
                 continue;
 
@@ -211,14 +214,14 @@ public sealed class TextExtractor : ITextExtractor
             }
         }
 
-        return new ExtractionPreview
+        return Task.FromResult(new ExtractionPreview
         {
             TotalFiles = files.Count,
             EstimatedChunks = estimatedChunks,
             EstimatedOutputSizeBytes = estimatedSize,
             SkippedFiles = files.Count - filesToProcess.Count,
             FilesToProcess = filesToProcess
-        };
+        });
     }
 
     private async Task<string> ExtractTextFromFileAsync(string filePath, TextExtractionOptions options, CancellationToken cancellationToken)
