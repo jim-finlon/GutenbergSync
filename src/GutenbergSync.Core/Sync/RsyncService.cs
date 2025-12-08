@@ -359,14 +359,31 @@ public sealed class RsyncService : IRsyncService
                     });
                 }
             }
-            else if (line.StartsWith("receiving file list") || line.Contains("files to consider"))
+            else if (line.StartsWith("receiving file list") || line.Contains("files to consider") || 
+                     line.Contains("building file list") || line.StartsWith("sending incremental"))
             {
                 // Initial phase - rsync is building file list
                 progress.Report(new SyncProgress
                 {
                     CurrentFile = "Building file list...",
-                    FilesTransferred = 0
+                    FilesTransferred = 0,
+                    BytesTransferred = 0
                 });
+            }
+            else if (line.Contains("files...") || line.Contains("to transfer"))
+            {
+                // Extract file count from lines like "12345 files to consider"
+                var fileMatch = Regex.Match(line, @"(\d+)\s+files");
+                if (fileMatch.Success && long.TryParse(fileMatch.Groups[1].Value, out var totalFiles))
+                {
+                    progress.Report(new SyncProgress
+                    {
+                        TotalFiles = totalFiles,
+                        CurrentFile = "Scanning files...",
+                        FilesTransferred = 0,
+                        BytesTransferred = 0
+                    });
+                }
             }
         }
     }

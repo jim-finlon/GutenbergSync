@@ -132,13 +132,40 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 {
                     // Convert rsync progress to orchestration progress
                     var percent = p.ProgressPercent ?? 0;
+                    string message;
+                    
+                    if (p.CurrentFile != null && !p.CurrentFile.Contains("Building") && !p.CurrentFile.Contains("Scanning"))
+                    {
+                        // Actual file transfer
+                        var fileName = Path.GetFileName(p.CurrentFile);
+                        message = $"Downloading {fileName}... ({p.FilesTransferred} files)";
+                        
+                        if (p.TotalBytes.HasValue && p.BytesTransferred > 0)
+                        {
+                            var mbTransferred = p.BytesTransferred / (1024.0 * 1024.0);
+                            var mbTotal = p.TotalBytes.Value / (1024.0 * 1024.0);
+                            message += $" ({mbTransferred:F1}/{mbTotal:F1} MB)";
+                        }
+                    }
+                    else if (p.CurrentFile != null)
+                    {
+                        // Building file list or scanning
+                        message = p.CurrentFile;
+                        if (p.TotalFiles.HasValue)
+                        {
+                            message += $" ({p.TotalFiles} files found)";
+                        }
+                    }
+                    else
+                    {
+                        message = "Downloading RDF files...";
+                    }
+                    
                     progress.Report(new SyncOrchestrationProgress
                     {
                         Phase = "Metadata",
-                        Message = p.CurrentFile != null 
-                            ? $"Downloading {Path.GetFileName(p.CurrentFile)}... ({p.FilesTransferred} files)"
-                            : "Downloading RDF files...",
-                        ProgressPercent = percent
+                        Message = message,
+                        ProgressPercent = percent > 0 ? percent : null // Only show percent when we have actual progress
                     });
                 });
             }
