@@ -217,9 +217,11 @@ public sealed class RsyncService : IRsyncService
         var args = new List<string>();
 
         // Basic options
-        args.Add("--archive"); // -a: archive mode
+        args.Add("--archive"); // -a: archive mode (preserves permissions, timestamps, etc.)
         args.Add("--verbose"); // -v: verbose
         args.Add("--human-readable"); // -h: human-readable sizes
+        args.Add("--partial"); // Keep partial files for resume
+        args.Add("--partial-dir=.rsync-partial"); // Store partial files in hidden directory
 
         if (options.ShowProgress && !listOnly)
         {
