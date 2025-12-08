@@ -30,8 +30,10 @@ public static class ServiceCollectionExtensions
         // Sync services
         services.AddScoped<IRsyncService, RsyncService>();
 
+        // Metadata services
+        services.AddScoped<IRdfParser, RdfParser>();
+
         // TODO: Add core services as they are implemented
-        // services.AddScoped<IRdfParser, RdfParser>();
         // services.AddScoped<ICatalogRepository, CatalogRepository>();
         // services.AddScoped<ITextExtractor, TextExtractor>();
         // services.AddScoped<IAuditService, AuditService>();
