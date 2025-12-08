@@ -140,10 +140,11 @@ public sealed class SyncCommand
                                 var shortMessage = message.Length > 50 ? message.Substring(0, 47) + "..." : message;
                                 metadataTask.Description = $"[cyan]Metadata:[/] {shortMessage}";
                                 
+                                // Always update the value if we have a percentage
                                 if (p.ProgressPercent.HasValue)
                                 {
                                     metadataTask.IsIndeterminate = false;
-                                    metadataTask.Value = p.ProgressPercent.Value;
+                                    metadataTask.Value = Math.Min(100, Math.Max(0, p.ProgressPercent.Value));
                                 }
                                 else
                                 {
@@ -176,9 +177,10 @@ public sealed class SyncCommand
                                 var shortMessage = message.Length > 50 ? message.Substring(0, 47) + "..." : message;
                                 contentTask.Description = $"[cyan]Content:[/] {shortMessage}";
                                 
+                                // Always update the value if we have a percentage
                                 if (p.ProgressPercent.HasValue)
                                 {
-                                    contentTask.Value = p.ProgressPercent.Value;
+                                    contentTask.Value = Math.Min(100, Math.Max(0, p.ProgressPercent.Value));
                                 }
                                 else
                                 {

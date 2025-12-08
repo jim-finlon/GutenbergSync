@@ -138,7 +138,10 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                     {
                         // Actual file transfer - keep message short, file name will be shown separately
                         var fileName = Path.GetFileName(p.CurrentFile);
-                        message = $"Downloading {fileName}... ({p.FilesTransferred} files)";
+                        message = $"Downloading... ({p.FilesTransferred} files)";
+                        
+                        // Use actual progress percentage from rsync
+                        percent = p.ProgressPercent ?? 0;
                         
                         // Don't add MB info to message - it makes it too long and pushes bars around
                         // The file name is shown on a separate line above the progress bars
@@ -158,11 +161,12 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                     }
                     
                     // Report progress - Progress<T> handles thread marshaling
+                    // Always report progress percentage if we have it (even if 0, so bars show activity)
                     progress.Report(new SyncOrchestrationProgress
                     {
                         Phase = "Metadata",
                         Message = message,
-                        ProgressPercent = percent > 0 ? percent : null // Only show percent when we have actual progress
+                        ProgressPercent = percent >= 0 ? percent : null
                     });
                 });
             }
@@ -316,11 +320,12 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             {
                 mainRsyncProgress = new Progress<SyncProgress>(p =>
                 {
+                    // Use actual progress percentage from rsync
                     var percent = p.ProgressPercent ?? 0;
                     // Keep message short - file name shown separately above progress bars
-                    var message = p.CurrentFile != null 
-                        ? $"Downloading {Path.GetFileName(p.CurrentFile)}... ({p.FilesTransferred} files)"
-                        : "Syncing main collection files...";
+                    var message = p.CurrentFile != null && !p.CurrentFile.Contains("Building") && !p.CurrentFile.Contains("Scanning")
+                        ? $"Downloading... ({p.FilesTransferred} files)"
+                        : p.CurrentFile ?? "Syncing main collection files...";
                     
                     // Don't add MB info - it makes message too long and pushes bars around
                     
@@ -328,7 +333,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                     {
                         Phase = "Content",
                         Message = message,
-                        ProgressPercent = percent
+                        ProgressPercent = percent >= 0 ? percent : null
                     });
                 });
             }
@@ -365,11 +370,12 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             {
                 epubRsyncProgress = new Progress<SyncProgress>(p =>
                 {
+                    // Use actual progress percentage from rsync
                     var percent = p.ProgressPercent ?? 0;
                     // Keep message short - file name shown separately above progress bars
-                    var message = p.CurrentFile != null 
-                        ? $"Downloading {Path.GetFileName(p.CurrentFile)}... ({p.FilesTransferred} files)"
-                        : "Syncing generated formats (EPUB, MOBI)...";
+                    var message = p.CurrentFile != null && !p.CurrentFile.Contains("Building") && !p.CurrentFile.Contains("Scanning")
+                        ? $"Downloading... ({p.FilesTransferred} files)"
+                        : p.CurrentFile ?? "Syncing generated formats (EPUB, MOBI)...";
                     
                     // Don't add MB info - it makes message too long and pushes bars around
                     
@@ -377,7 +383,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                     {
                         Phase = "Content",
                         Message = message,
-                        ProgressPercent = 50 + (percent * 0.5) // EPUB sync is second half of content phase
+                        ProgressPercent = percent >= 0 ? (50 + (percent * 0.5)) : null // EPUB sync is second half of content phase
                     });
                 });
             }

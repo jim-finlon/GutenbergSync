@@ -309,8 +309,9 @@ public sealed class RsyncService : IRsyncService
     {
         // Regex to match rsync progress lines
         // Format: "1234567  45%  1.23MB/s    0:00:05  filename.txt"
+        // Also matches: "1234567  45%  12345678  1.23MB/s    0:00:05  filename.txt" (with total size)
         var progressRegex = new Regex(
-            @"(\d+)\s+(\d+)%\s+([\d.]+[KMGT]?B/s)\s+(\d+:\d+:\d+)\s+(.+)",
+            @"(\d+)\s+(\d+)%\s+(\d+)?\s*([\d.]+[KMGT]?B/s)?\s*(\d+:\d+:\d+)?\s*(.+)",
             RegexOptions.Compiled);
 
         long totalBytes = 0;
