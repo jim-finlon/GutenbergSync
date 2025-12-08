@@ -27,8 +27,10 @@ public sealed class RsyncDiscoveryService : IRsyncDiscoveryService
             };
         }
 
-        // Get version
-        var version = await GetRsyncVersionAsync(executablePath, cancellationToken);
+        // Get version (handle WSL specially)
+        var version = source == RsyncSource.WSL
+            ? await GetRsyncVersionFromWSLAsync(cancellationToken)
+            : await GetRsyncVersionAsync(executablePath, cancellationToken);
 
         return new RsyncDiscoveryResult
         {
@@ -158,8 +160,8 @@ public sealed class RsyncDiscoveryService : IRsyncDiscoveryService
                 var path = output.Trim();
                 if (!string.IsNullOrWhiteSpace(path))
                 {
-                    // Return WSL command to invoke rsync
-                    return $"wsl rsync";
+                    // Return "wsl" as executable - rsync will be invoked via WSL
+                    return "wsl";
                 }
             }
         }
@@ -249,6 +251,42 @@ public sealed class RsyncDiscoveryService : IRsyncDiscoveryService
             {
                 FileName = executablePath,
                 Arguments = "--version",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(processStartInfo);
+            if (process == null)
+                return null;
+
+            await process.WaitForExitAsync(cancellationToken);
+
+            if (process.ExitCode == 0)
+            {
+                var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+                // Extract version from first line (e.g., "rsync  version 3.2.7")
+                var firstLine = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                return firstLine?.Trim();
+            }
+        }
+        catch
+        {
+            // Ignore errors
+        }
+
+        return null;
+    }
+
+    private static async Task<string?> GetRsyncVersionFromWSLAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var processStartInfo = new ProcessStartInfo
+            {
+                FileName = "wsl",
+                Arguments = "rsync --version",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
