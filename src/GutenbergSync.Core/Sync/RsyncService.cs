@@ -86,11 +86,12 @@ public sealed class RsyncService : IRsyncService
             }
 
             // Parse output for progress
+            // Use ConfigureAwait(false) to allow progress updates from background thread
             var progressTask = Task.Run(async () =>
             {
                 if (progress != null && options.ShowProgress)
                 {
-                    await ParseProgressAsync(process, progress, cts.Token);
+                    await ParseProgressAsync(process, progress, cts.Token).ConfigureAwait(false);
                 }
             }, cts.Token);
 
@@ -319,9 +320,11 @@ public sealed class RsyncService : IRsyncService
 
         while (!process.HasExited && !cancellationToken.IsCancellationRequested)
         {
-            var line = await process.StandardOutput.ReadLineAsync(cancellationToken);
-            if (line == null)
-                break;
+            try
+            {
+                var line = await process.StandardOutput.ReadLineAsync(cancellationToken);
+                if (line == null)
+                    break;
 
             // Parse progress line
             var match = progressRegex.Match(line);
@@ -363,6 +366,7 @@ public sealed class RsyncService : IRsyncService
                      line.Contains("building file list") || line.StartsWith("sending incremental"))
             {
                 // Initial phase - rsync is building file list
+                // Report periodically to show activity
                 progress.Report(new SyncProgress
                 {
                     CurrentFile = "Building file list...",
@@ -379,11 +383,33 @@ public sealed class RsyncService : IRsyncService
                     progress.Report(new SyncProgress
                     {
                         TotalFiles = totalFiles,
-                        CurrentFile = "Scanning files...",
+                        CurrentFile = $"Scanning files... ({totalFiles} found)",
                         FilesTransferred = 0,
                         BytesTransferred = 0
                     });
                 }
+            }
+            else if (!string.IsNullOrWhiteSpace(line) && !line.StartsWith("total size"))
+            {
+                // Report any other non-empty lines to show activity
+                // This helps show that rsync is working even if we can't parse the line
+                if (filesTransferred == 0 && bytesTransferred == 0)
+                {
+                    progress.Report(new SyncProgress
+                    {
+                        CurrentFile = line.Trim(),
+                        FilesTransferred = 0,
+                        BytesTransferred = 0
+                    });
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception)
+            {
+                // Ignore parsing errors, continue reading
             }
         }
     }

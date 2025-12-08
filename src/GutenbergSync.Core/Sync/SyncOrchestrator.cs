@@ -161,6 +161,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                         message = "Downloading RDF files...";
                     }
                     
+                    // Report progress - Progress<T> handles thread marshaling
                     progress.Report(new SyncOrchestrationProgress
                     {
                         Phase = "Metadata",
