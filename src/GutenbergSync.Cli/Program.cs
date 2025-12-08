@@ -19,28 +19,32 @@ internal class Program
     {
         // Build service provider
         var services = new ServiceCollection();
+        
+        // Load configuration first
+        var tempProvider = services.BuildServiceProvider();
+        var configLoader = tempProvider.GetRequiredService<IConfigurationLoader>();
+        AppConfiguration config;
+        
+        try
+        {
+            config = await configLoader.LoadAsync();
+        }
+        catch
+        {
+            config = configLoader.CreateDefault();
+        }
+
+        // Register configuration
+        services.AddSingleton(config);
+
+        // Add core services
         services.AddGutenbergSyncCore();
 
         // Configure logging
         var loggerFactory = services.BuildServiceProvider().GetRequiredService<ILoggerFactory>();
-        var configLoader = services.BuildServiceProvider().GetRequiredService<IConfigurationLoader>();
-        
-        try
-        {
-            var config = await configLoader.LoadAsync();
-            var logger = loggerFactory.CreateLogger(config.Logging);
-            Log.Logger = logger;
-
-            services.AddSingleton(Log.Logger);
-        }
-        catch
-        {
-            // Use default logger if config fails
-            Log.Logger = new LoggerConfiguration()
-                .WriteTo.Console()
-                .CreateLogger();
-            services.AddSingleton(Log.Logger);
-        }
+        var logger = loggerFactory.CreateLogger(config.Logging);
+        Log.Logger = logger;
+        services.AddSingleton(Log.Logger);
 
         var serviceProvider = services.BuildServiceProvider();
 
