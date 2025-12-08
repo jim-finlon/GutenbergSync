@@ -176,7 +176,5 @@ public sealed class ConfigurationLoader : IConfigurationLoader
                 Logging = config.Logging with { FilePath = logPath }
             };
         }
-
-        return config;
     }
 }
