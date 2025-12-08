@@ -1,0 +1,63 @@
+{
+  "Sync": {
+    "TargetDirectory": "/home/jfinlon/gutenberg",
+    "Preset": "text-epub",
+    "Mirrors": [
+      {
+        "Host": "aleph.gutenberg.org",
+        "Module": "gutenberg",
+        "Priority": 1,
+        "Region": "US"
+      },
+      {
+        "Host": "aleph.gutenberg.org",
+        "Module": "gutenberg-epub",
+        "Priority": 1,
+        "Region": "US"
+      },
+      {
+        "Host": "ftp.ibiblio.org",
+        "Module": "gutenberg",
+        "Priority": 2,
+        "Region": "US"
+      }
+    ],
+    "Include": [
+      "*/",
+      "*.txt",
+      "*.epub",
+      "*.zip"
+    ],
+    "Exclude": [
+      "*/old/*",
+      "*.mp3",
+      "*.ogg"
+    ],
+    "MaxFileSizeMb": 50,
+    "BandwidthLimitKbps": null,
+    "DeleteRemoved": false,
+    "TimeoutSeconds": 600
+  },
+  "Catalog": {
+    "DatabasePath": null,
+    "AutoRebuildOnSync": true,
+    "VerifyAfterSync": true,
+    "AuditScanIntervalDays": 7
+  },
+  "Extraction": {
+    "OutputDirectory": null,
+    "StripHeaders": true,
+    "NormalizeEncoding": true,
+    "DefaultChunkSizeWords": 500,
+    "DefaultChunkOverlapWords": 50,
+    "Incremental": true,
+    "ValidateChunks": true,
+    "DefaultFormat": "json",
+    "CompressOutput": false
+  },
+  "Logging": {
+    "Level": "Information",
+    "FilePath": null,
+    "RetainDays": 30
+  }
+}

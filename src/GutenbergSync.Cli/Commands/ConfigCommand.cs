@@ -14,6 +14,43 @@ public sealed class ConfigCommand
     {
         var command = new Command("config", "Manage configuration");
 
+        var initCommand = new Command("init", "Initialize a default configuration file");
+        var initPathOption = new Option<string>(
+            "--path",
+            description: "Path where to create the configuration file",
+            getDefaultValue: () => "config.json");
+
+        initCommand.AddOption(initPathOption);
+        initCommand.SetHandler(async (path) =>
+        {
+            var logger = serviceProvider.GetRequiredService<ILogger>();
+            var configLoader = serviceProvider.GetRequiredService<IConfigurationLoader>();
+
+            try
+            {
+                if (File.Exists(path))
+                {
+                    logger.Warning("Configuration file already exists: {Path}", path);
+                    logger.Information("Use --path to specify a different location");
+                    return;
+                }
+
+                var defaultConfig = configLoader.CreateDefault();
+                var json = System.Text.Json.JsonSerializer.Serialize(defaultConfig, new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+
+                await File.WriteAllTextAsync(path, json);
+                logger.Information("Created default configuration file: {Path}", path);
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Failed to create configuration file");
+                Environment.ExitCode = 1;
+            }
+        }, initPathOption);
+
         var validateCommand = new Command("validate", "Validate configuration file");
         var configFileOption = new Option<string>(
             "--config",
@@ -66,6 +103,7 @@ public sealed class ConfigCommand
             }
         }, configFileOption);
 
+        command.AddCommand(initCommand);
         command.AddCommand(validateCommand);
 
         return command;
