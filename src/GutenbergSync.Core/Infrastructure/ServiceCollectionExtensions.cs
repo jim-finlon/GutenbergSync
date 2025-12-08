@@ -4,6 +4,7 @@ using GutenbergSync.Core.Infrastructure;
 using GutenbergSync.Core.Metadata;
 using GutenbergSync.Core.Sync;
 using GutenbergSync.Core.Catalog;
+using GutenbergSync.Core.Extraction;
 
 namespace GutenbergSync.Core.Infrastructure;
 

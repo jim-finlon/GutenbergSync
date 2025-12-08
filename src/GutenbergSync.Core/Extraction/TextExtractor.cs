@@ -395,7 +395,7 @@ public sealed class TextExtractor : ITextExtractor
         try
         {
             using var reader = new StreamReader(filePath, Encoding.UTF8, true);
-            reader.ReadToEnd();
+            _ = reader.ReadToEnd();
             return reader.CurrentEncoding;
         }
         catch
