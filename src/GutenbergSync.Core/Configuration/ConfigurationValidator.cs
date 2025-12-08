@@ -50,11 +50,14 @@ public sealed class ConfigurationValidator : IConfigurationValidator
         try
         {
             var dir = new DirectoryInfo(sync.TargetDirectory);
+            bool directoryWasCreated = false;
+
             if (!dir.Exists)
             {
                 try
                 {
                     dir.Create();
+                    directoryWasCreated = true;
                     warnings.Add(new ValidationWarning
                     {
                         Path = "sync.targetDirectory",
@@ -69,9 +72,12 @@ public sealed class ConfigurationValidator : IConfigurationValidator
                         Message = $"Cannot create target directory: {ex.Message}",
                         SuggestedFix = "Ensure the path is valid and you have write permissions"
                     });
+                    return; // Can't continue validation if directory creation failed
                 }
             }
-            else if (!IsDirectoryWritable(dir))
+
+            // Always check writability, whether directory existed or was just created
+            if (!IsDirectoryWritable(dir))
             {
                 errors.Add(new ValidationError
                 {
@@ -135,11 +141,14 @@ public sealed class ConfigurationValidator : IConfigurationValidator
                 if (!string.IsNullOrWhiteSpace(dbDir))
                 {
                     var dir = new DirectoryInfo(dbDir);
+                    bool directoryWasCreated = false;
+
                     if (!dir.Exists)
                     {
                         try
                         {
                             dir.Create();
+                            directoryWasCreated = true;
                         }
                         catch (Exception ex)
                         {
@@ -149,7 +158,19 @@ public sealed class ConfigurationValidator : IConfigurationValidator
                                 Message = $"Cannot create database directory: {ex.Message}",
                                 SuggestedFix = "Ensure the directory path is valid and you have write permissions"
                             });
+                            return; // Can't continue validation if directory creation failed
                         }
+                    }
+
+                    // Always check writability, whether directory existed or was just created
+                    if (!IsDirectoryWritable(dir))
+                    {
+                        errors.Add(new ValidationError
+                        {
+                            Path = "catalog.databasePath",
+                            Message = "Database directory is not writable",
+                            SuggestedFix = "Check directory permissions"
+                        });
                     }
                 }
             }
@@ -172,11 +193,14 @@ public sealed class ConfigurationValidator : IConfigurationValidator
             try
             {
                 var dir = new DirectoryInfo(extraction.OutputDirectory);
+                bool directoryWasCreated = false;
+
                 if (!dir.Exists)
                 {
                     try
                     {
                         dir.Create();
+                        directoryWasCreated = true;
                     }
                     catch (Exception ex)
                     {
@@ -186,7 +210,19 @@ public sealed class ConfigurationValidator : IConfigurationValidator
                             Message = $"Cannot create output directory: {ex.Message}",
                             SuggestedFix = "Ensure the path is valid and you have write permissions"
                         });
+                        return; // Can't continue validation if directory creation failed
                     }
+                }
+
+                // Always check writability, whether directory existed or was just created
+                if (!IsDirectoryWritable(dir))
+                {
+                    errors.Add(new ValidationError
+                    {
+                        Path = "extraction.outputDirectory",
+                        Message = "Output directory is not writable",
+                        SuggestedFix = "Check directory permissions"
+                    });
                 }
             }
             catch (Exception ex)
@@ -251,11 +287,14 @@ public sealed class ConfigurationValidator : IConfigurationValidator
                 if (!string.IsNullOrWhiteSpace(logDir))
                 {
                     var dir = new DirectoryInfo(logDir);
+                    bool directoryWasCreated = false;
+
                     if (!dir.Exists)
                     {
                         try
                         {
                             dir.Create();
+                            directoryWasCreated = true;
                         }
                         catch (Exception ex)
                         {
@@ -265,7 +304,19 @@ public sealed class ConfigurationValidator : IConfigurationValidator
                                 Message = $"Cannot create log directory: {ex.Message}",
                                 SuggestedFix = "Ensure the directory path is valid and you have write permissions"
                             });
+                            return; // Can't continue validation if directory creation failed
                         }
+                    }
+
+                    // Always check writability, whether directory existed or was just created
+                    if (!IsDirectoryWritable(dir))
+                    {
+                        errors.Add(new ValidationError
+                        {
+                            Path = "logging.filePath",
+                            Message = "Log directory is not writable",
+                            SuggestedFix = "Check directory permissions"
+                        });
                     }
                 }
             }
