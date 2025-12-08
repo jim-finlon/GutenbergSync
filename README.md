@@ -105,11 +105,45 @@ If rsync is not found, the application will provide platform-specific installati
 
 ### Build GutenbergSync
 
+**Option 1: Using the publish script (recommended)**
 ```bash
 git clone <repository-url>
 cd GutenbergSync
-dotnet build -c Release
-dotnet publish -c Release -o ./publish
+./publish.sh
+```
+
+The script builds a self-contained deployment by default. To customize:
+```bash
+# Framework-dependent (requires .NET runtime installed)
+SELF_CONTAINED=false ./publish.sh
+
+# Different runtime
+RUNTIME=win-x64 ./publish.sh
+RUNTIME=osx-x64 ./publish.sh
+```
+
+**Option 2: Manual publish**
+
+Self-contained (includes .NET runtime, ~146MB):
+```bash
+dotnet publish src/GutenbergSync.Cli/GutenbergSync.Cli.csproj \
+    -c Release \
+    -o ./publish \
+    --self-contained true \
+    -r linux-x64
+```
+
+Framework-dependent (requires .NET 9.0 runtime, ~75KB):
+```bash
+dotnet publish src/GutenbergSync.Cli/GutenbergSync.Cli.csproj \
+    -c Release \
+    -o ./publish \
+    --self-contained false
+```
+
+**Run the application:**
+```bash
+./publish/gutenberg-sync --help
 ```
 
 ## Quick Start
