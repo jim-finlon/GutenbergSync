@@ -78,8 +78,8 @@
 
 | Component | Technology | Rationale |
 |-----------|------------|-----------|
-| Runtime | .NET 8.0 LTS | Long-term support, cross-platform, performance |
-| Language | C# 12 | Modern language features, strong typing |
+| Runtime | .NET 9.0 | Latest stable release, cross-platform, performance |
+| Language | C# 13 | Modern language features, strong typing |
 | Project Type | Console Application + Class Library | CLI tool with reusable library |
 
 ### 2.2 Dependencies
@@ -87,15 +87,15 @@
 | Package | Version | Purpose |
 |---------|---------|---------|
 | `System.CommandLine` | 2.0+ | CLI argument parsing |
-| `Microsoft.Data.Sqlite` | 8.0+ | SQLite database access |
+| `Microsoft.Data.Sqlite` | 9.0+ | SQLite database access |
 | `Dapper` | 2.1+ | Micro-ORM for database queries |
 | `Serilog` | 3.1+ | Structured logging |
 | `Serilog.Sinks.Console` | 5.0+ | Console output |
 | `Serilog.Sinks.File` | 5.0+ | File logging |
 | `System.IO.Compression` | (built-in) | Zip file handling |
 | `SharpZipLib` | 1.4+ | Advanced compression support |
-| `Microsoft.Extensions.Configuration` | 8.0+ | Configuration management |
-| `Microsoft.Extensions.DependencyInjection` | 8.0+ | DI container |
+| `Microsoft.Extensions.Configuration` | 9.0+ | Configuration management |
+| `Microsoft.Extensions.DependencyInjection` | 9.0+ | DI container |
 | `Spectre.Console` | 0.48+ | Rich console output, progress bars |
 | `Polly` | 8.0+ | Retry policies, resilience |
 
@@ -1332,11 +1332,11 @@ dotnet publish -c Release -o ./publish/portable
 ### 10.3 Docker Support
 
 ```dockerfile
-FROM mcr.microsoft.com/dotnet/runtime:8.0 AS base
+FROM mcr.microsoft.com/dotnet/runtime:9.0 AS base
 RUN apt-get update && apt-get install -y rsync && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 COPY . .
 RUN dotnet publish "src/GutenbergSync.Cli/GutenbergSync.Cli.csproj" \

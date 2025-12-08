@@ -4,8 +4,8 @@
 .NET 8.0 application for mirroring Project Gutenberg archive and creating RAG-ready chunks.
 
 ## Technology Stack
-- Runtime: .NET 8.0 LTS
-- Language: C# 12
+- Runtime: .NET 9.0
+- Language: C# 13
 - Database: SQLite (Microsoft.Data.Sqlite)
 - CLI: System.CommandLine, Spectre.Console
 - Logging: Serilog
