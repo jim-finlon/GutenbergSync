@@ -41,6 +41,9 @@ public static class ServiceCollectionExtensions
         // Extraction services
         services.AddScoped<ITextExtractor, TextExtractor>();
 
+        // Sync orchestration
+        services.AddScoped<ISyncOrchestrator, SyncOrchestrator>();
+
         // TODO: Add core services as they are implemented
         // services.AddScoped<IAuditService, AuditService>();
         // services.AddScoped<IDatabaseMaintenanceService, DatabaseMaintenanceService>();
