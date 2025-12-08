@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <AssemblyName>gutenberg-sync</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
