@@ -1,7 +1,5 @@
 using Serilog;
 using Serilog.Events;
-using Serilog.Formatting.Compact;
-using Serilog.Formatting.Json;
 using GutenbergSync.Core.Configuration;
 
 namespace GutenbergSync.Core.Infrastructure;
