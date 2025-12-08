@@ -1,0 +1,56 @@
+{
+  "$schema": "../docs/config.schema.json",
+  "sync": {
+    "targetDirectory": "/data/gutenberg",
+    "preset": "text-epub",
+    "mirrors": [
+      {
+        "host": "aleph.gutenberg.org",
+        "module": "gutenberg",
+        "priority": 1,
+        "region": "US"
+      },
+      {
+        "host": "aleph.gutenberg.org",
+        "module": "gutenberg-epub",
+        "priority": 1,
+        "region": "US"
+      },
+      {
+        "host": "ftp.ibiblio.org",
+        "module": "gutenberg",
+        "priority": 2,
+        "region": "US"
+      }
+    ],
+    "include": ["*/", "*.txt", "*.epub", "*.zip"],
+    "exclude": ["*/old/*", "*.mp3", "*.ogg"],
+    "maxFileSizeMb": 50,
+    "bandwidthLimitKbps": null,
+    "deleteRemoved": false,
+    "timeoutSeconds": 600
+  },
+  "catalog": {
+    "databasePath": null,
+    "autoRebuildOnSync": true,
+    "verifyAfterSync": true,
+    "auditScanIntervalDays": 7
+  },
+  "extraction": {
+    "outputDirectory": "/data/gutenberg-text",
+    "stripHeaders": true,
+    "normalizeEncoding": true,
+    "defaultChunkSizeWords": 500,
+    "defaultChunkOverlapWords": 50,
+    "incremental": true,
+    "validateChunks": true,
+    "defaultFormat": "json",
+    "compressOutput": false
+  },
+  "logging": {
+    "level": "Information",
+    "filePath": "logs/gutenberg-sync.log",
+    "retainDays": 30
+  }
+}
+
