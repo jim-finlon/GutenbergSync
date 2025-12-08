@@ -136,16 +136,12 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                     
                     if (p.CurrentFile != null && !p.CurrentFile.Contains("Building") && !p.CurrentFile.Contains("Scanning"))
                     {
-                        // Actual file transfer
+                        // Actual file transfer - keep message short, file name will be shown separately
                         var fileName = Path.GetFileName(p.CurrentFile);
                         message = $"Downloading {fileName}... ({p.FilesTransferred} files)";
                         
-                        if (p.TotalBytes.HasValue && p.BytesTransferred > 0)
-                        {
-                            var mbTransferred = p.BytesTransferred / (1024.0 * 1024.0);
-                            var mbTotal = p.TotalBytes.Value / (1024.0 * 1024.0);
-                            message += $" ({mbTransferred:F1}/{mbTotal:F1} MB)";
-                        }
+                        // Don't add MB info to message - it makes it too long and pushes bars around
+                        // The file name is shown on a separate line above the progress bars
                     }
                     else if (p.CurrentFile != null)
                     {
@@ -321,16 +317,12 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 mainRsyncProgress = new Progress<SyncProgress>(p =>
                 {
                     var percent = p.ProgressPercent ?? 0;
+                    // Keep message short - file name shown separately above progress bars
                     var message = p.CurrentFile != null 
                         ? $"Downloading {Path.GetFileName(p.CurrentFile)}... ({p.FilesTransferred} files)"
                         : "Syncing main collection files...";
                     
-                    if (p.TotalBytes.HasValue && p.BytesTransferred > 0)
-                    {
-                        var mbTransferred = p.BytesTransferred / (1024.0 * 1024.0);
-                        var mbTotal = p.TotalBytes.Value / (1024.0 * 1024.0);
-                        message += $" ({mbTransferred:F1}/{mbTotal:F1} MB)";
-                    }
+                    // Don't add MB info - it makes message too long and pushes bars around
                     
                     progress.Report(new SyncOrchestrationProgress
                     {
@@ -374,16 +366,12 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 epubRsyncProgress = new Progress<SyncProgress>(p =>
                 {
                     var percent = p.ProgressPercent ?? 0;
+                    // Keep message short - file name shown separately above progress bars
                     var message = p.CurrentFile != null 
                         ? $"Downloading {Path.GetFileName(p.CurrentFile)}... ({p.FilesTransferred} files)"
                         : "Syncing generated formats (EPUB, MOBI)...";
                     
-                    if (p.TotalBytes.HasValue && p.BytesTransferred > 0)
-                    {
-                        var mbTransferred = p.BytesTransferred / (1024.0 * 1024.0);
-                        var mbTotal = p.TotalBytes.Value / (1024.0 * 1024.0);
-                        message += $" ({mbTransferred:F1}/{mbTotal:F1} MB)";
-                    }
+                    // Don't add MB info - it makes message too long and pushes bars around
                     
                     progress.Report(new SyncOrchestrationProgress
                     {

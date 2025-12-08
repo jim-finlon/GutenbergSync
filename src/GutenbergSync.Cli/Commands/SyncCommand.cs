@@ -89,6 +89,11 @@ public sealed class SyncCommand
 
                 logger.Information("Starting sync operation...");
                 AnsiConsole.MarkupLine("[green]Starting sync operation...[/]");
+                AnsiConsole.WriteLine(); // Line break before progress bars
+
+                // Track current file for display above progress bars
+                string? currentMetadataFile = null;
+                string? currentContentFile = null;
 
                 // Use Spectre.Console Progress for live updates
                 var result = await AnsiConsole.Progress()
@@ -105,7 +110,7 @@ public sealed class SyncCommand
                     .StartAsync(async ctx =>
                     {
                         var metadataTask = ctx.AddTask("[cyan]Metadata:[/] Syncing RDF files...", maxValue: 100);
-                        var contentTask = ctx.AddTask("[cyan]Content:[/] Syncing files...", maxValue: 100);
+                        var contentTask = ctx.AddTask("[cyan]Content:[/] Waiting...", maxValue: 100);
                         contentTask.IsIndeterminate = true; // Hide until content sync starts
 
                         var progress = new Progress<SyncOrchestrationProgress>(p =>
@@ -113,7 +118,28 @@ public sealed class SyncCommand
                             // Update progress on the current context (Spectre.Console handles thread safety)
                             if (p.Phase == "Metadata")
                             {
-                                metadataTask.Description = $"[cyan]Metadata:[/] {p.Message}";
+                                // Extract file name from message if present
+                                var message = p.Message;
+                                if (message.Contains("Downloading") && message.Contains("..."))
+                                {
+                                    var fileNameStart = message.IndexOf("Downloading") + 12;
+                                    var fileNameEnd = message.IndexOf("...", fileNameStart);
+                                    if (fileNameEnd > fileNameStart)
+                                    {
+                                        var fileName = message.Substring(fileNameStart, fileNameEnd - fileNameStart).Trim();
+                                        if (fileName != currentMetadataFile)
+                                        {
+                                            currentMetadataFile = fileName;
+                                            // Display file name on a separate line above progress bars
+                                            AnsiConsole.MarkupLine($"[dim]  → {fileName}[/]");
+                                        }
+                                    }
+                                }
+                                
+                                // Keep description short to avoid pushing bars around
+                                var shortMessage = message.Length > 50 ? message.Substring(0, 47) + "..." : message;
+                                metadataTask.Description = $"[cyan]Metadata:[/] {shortMessage}";
+                                
                                 if (p.ProgressPercent.HasValue)
                                 {
                                     metadataTask.IsIndeterminate = false;
@@ -127,8 +153,29 @@ public sealed class SyncCommand
                             }
                             else if (p.Phase == "Content")
                             {
+                                // Extract file name from message if present
+                                var message = p.Message;
+                                if (message.Contains("Downloading") && message.Contains("..."))
+                                {
+                                    var fileNameStart = message.IndexOf("Downloading") + 12;
+                                    var fileNameEnd = message.IndexOf("...", fileNameStart);
+                                    if (fileNameEnd > fileNameStart)
+                                    {
+                                        var fileName = message.Substring(fileNameStart, fileNameEnd - fileNameStart).Trim();
+                                        if (fileName != currentContentFile)
+                                        {
+                                            currentContentFile = fileName;
+                                            // Display file name on a separate line above progress bars
+                                            AnsiConsole.MarkupLine($"[dim]  → {fileName}[/]");
+                                        }
+                                    }
+                                }
+                                
                                 contentTask.IsIndeterminate = false;
-                                contentTask.Description = $"[cyan]Content:[/] {p.Message}";
+                                // Keep description short to avoid pushing bars around
+                                var shortMessage = message.Length > 50 ? message.Substring(0, 47) + "..." : message;
+                                contentTask.Description = $"[cyan]Content:[/] {shortMessage}";
+                                
                                 if (p.ProgressPercent.HasValue)
                                 {
                                     contentTask.Value = p.ProgressPercent.Value;
