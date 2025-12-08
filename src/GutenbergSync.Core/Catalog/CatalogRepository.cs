@@ -563,7 +563,7 @@ public sealed class CatalogRepository : ICatalogRepository
             Rights = ebook.Rights,
             DownloadCount = ebook.DownloadCount,
             RdfPath = ebook.RdfPath,
-            VerifiedUtc = ebook.VerifiedUtc != null && DateTime.TryParse(ebook.VerifiedUtc, out var verified) ? verified : null,
+            VerifiedUtc = ebook.VerifiedUtc != null && DateTime.TryParse(ebook.VerifiedUtc, null, System.Globalization.DateTimeStyles.None, out var verified) ? verified : null,
             Checksum = ebook.Checksum
         };
     }
