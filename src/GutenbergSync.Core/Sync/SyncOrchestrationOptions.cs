@@ -29,5 +29,10 @@ public sealed record SyncOrchestrationOptions
     /// Dry-run mode
     /// </summary>
     public bool DryRun { get; init; }
+
+    /// <summary>
+    /// Timeout in seconds (0 = no timeout, null = use default from config)
+    /// </summary>
+    public int? TimeoutSeconds { get; init; }
 }
 

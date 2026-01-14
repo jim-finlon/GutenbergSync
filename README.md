@@ -21,7 +21,8 @@ The application uses a **metadata-first synchronization strategy** that builds a
 - ✅ Bandwidth throttling and rate limiting
 - ✅ Content filtering by file type and language
 - ✅ Metadata-first sync strategy (RDF → catalog → content)
-- ✅ Resume interrupted downloads
+- ✅ Resume interrupted downloads (automatic via rsync)
+- ✅ Auto-retry on failure (built-in CLI option or wrapper script)
 - ✅ File integrity verification and auditing
 
 ### Metadata Management
@@ -187,6 +188,25 @@ gutenberg-sync sync -t /data/gutenberg -p full
 The sync process uses a **metadata-first strategy**:
 - **Phase 1**: Downloads RDF metadata files and builds the catalog
 - **Phase 2**: Downloads content files using the catalog as a checklist
+
+**Auto-Retry on Interruption**: If the sync is interrupted (network error, system crash, etc.), you can use auto-retry to automatically resume:
+
+```bash
+# Auto-retry with infinite retries (recommended for long downloads)
+gutenberg-sync sync -t /data/gutenberg -p text-epub --auto-retry
+
+# Auto-retry with maximum retry limit
+gutenberg-sync sync -t /data/gutenberg -p text-epub --auto-retry --max-retries 10 --retry-delay 30
+
+# Or use the wrapper script
+./sync-with-retry.sh -t /data/gutenberg -p text-epub
+```
+
+The sync automatically resumes from where it stopped - rsync's built-in resume handles partial files efficiently. Auto-retry ensures the process restarts automatically if interrupted.
+
+**Running in Background**: For long syncs that need to survive screen locks or terminal disconnections, see [RUN_IN_BACKGROUND.md](RUN_IN_BACKGROUND.md) for options using `screen`, `tmux`, `nohup`, or systemd services.
+
+**Important**: Content sync now has **no timeout by default** (runs indefinitely). Use `--timeout <seconds>` if you need to set a timeout.
 
 ### 3. Extract RAG-Ready Chunks
 

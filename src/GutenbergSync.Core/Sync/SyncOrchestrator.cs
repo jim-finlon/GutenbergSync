@@ -114,7 +114,7 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
                 Include = new[] { "*/", "*.rdf" }, // Include directories and RDF files
                 DryRun = options.DryRun,
                 ShowProgress = true,
-                TimeoutSeconds = 3600 // 1 hour timeout for metadata sync (can be large)
+                TimeoutSeconds = options.TimeoutSeconds ?? 3600 // 1 hour default for metadata sync
             };
 
             progress?.Report(new SyncOrchestrationProgress
@@ -307,7 +307,8 @@ public sealed class SyncOrchestrator : ISyncOrchestrator
             {
                 Include = includePatterns.Length > 0 ? includePatterns : Array.Empty<string>(),
                 DryRun = options.DryRun,
-                ShowProgress = true
+                ShowProgress = true,
+                TimeoutSeconds = options.TimeoutSeconds ?? 0 // No timeout by default for content sync (can take hours)
             };
 
             progress?.Report(new SyncOrchestrationProgress

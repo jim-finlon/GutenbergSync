@@ -48,10 +48,11 @@ public sealed class RsyncService : IRsyncService
         // Build rsync arguments
         var arguments = BuildRsyncArguments(endpoint, targetDirectory, options);
 
+        var hasTimeout = options.TimeoutSeconds > 0;
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            if (options.TimeoutSeconds > 0)
+            if (hasTimeout)
             {
                 cts.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
             }
@@ -150,6 +151,23 @@ public sealed class RsyncService : IRsyncService
         }
         catch (OperationCanceledException)
         {
+            // Check if cancellation was due to timeout (timeout triggered but not manual cancellation)
+            // If timeout was set and the original cancellation token wasn't cancelled, it's a timeout
+            var isTimeout = hasTimeout && !cancellationToken.IsCancellationRequested;
+            
+            if (isTimeout)
+            {
+                _logger.Warning("Rsync operation timed out after {TimeoutSeconds}s - partial files preserved for resume", options.TimeoutSeconds);
+                return new SyncResult
+                {
+                    Success = false,
+                    ExitCode = -1,
+                    ErrorMessage = $"Operation timed out after {options.TimeoutSeconds} seconds. Run the same command again to resume.",
+                    Duration = DateTime.UtcNow - startTime,
+                    WasCancelled = false // Timeout is not a cancellation - should retry
+                };
+            }
+            
             _logger.Information("Rsync operation was cancelled - partial files preserved for resume");
             return new SyncResult
             {
