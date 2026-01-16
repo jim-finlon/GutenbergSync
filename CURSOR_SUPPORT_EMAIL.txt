@@ -1,0 +1,175 @@
+To: hi@cursor.com
+Subject: Persistent GPG Key Error for Linux APT Repository (NO_PUBKEY 42A1772E62E492D6) - Affecting Users for Months
+
+Hello Cursor Support Team,
+
+I am reporting a persistent and widespread issue with the Cursor IDE Linux APT repository that has been affecting users for months, if not since the repository was first established. This issue prevents `apt-get update` from completing successfully on Linux systems.
+
+---
+
+## Problem Summary
+
+The Cursor APT repository (`https://downloads.cursor.com/aptrepo`) fails GPG signature verification because the required public key (ID: `42A1772E62E492D6`) cannot be obtained through standard methods.
+
+**Error Message:**
+```
+Err:12 https://downloads.cursor.com/aptrepo stable InRelease
+  The following signatures couldn't be verified because the public key is not available: NO_PUBKEY 42A1772E62E492D6
+W: GPG error: https://downloads.cursor.com/aptrepo stable InRelease: The following signatures couldn't be verified because the public key is not available: NO_PUBKEY 42A1772E62E492D6
+E: The repository 'https://downloads.cursor.com/aptrepo stable InRelease' is not signed.
+```
+
+---
+
+## Root Cause Analysis
+
+I have performed a technical analysis and identified the following issues:
+
+### 1. GPG Key Download URL Returns 403 Forbidden
+The documented method for obtaining the GPG key fails:
+- URL: `https://downloads.cursor.com/aptrepo/gpg.key`
+- Result: HTTP 403 Forbidden
+- Impact: Automated installation scripts and manual key retrieval fail
+
+### 2. Key Not Available on Public Keyservers
+The key cannot be retrieved from standard GPG keyservers:
+- Tested: `keyserver.ubuntu.com`, `hkp://keyserver.ubuntu.com:80`
+- Result: "gpg: keyserver receive failed: No data"
+- Impact: Users cannot retrieve the key using standard GPG methods
+
+### 3. Repository Files Are Properly Signed
+The repository's `InRelease` file contains valid PGP signatures, indicating:
+- The signing infrastructure is working correctly
+- The issue is purely with key distribution, not signing
+
+### 4. Empty Keyring Files Created
+During installation, empty keyring files (0 bytes) are created at:
+- `/usr/share/keyrings/cursor.gpg`
+- `/usr/share/keyrings/cursor-archive-keyring.gpg`
+
+This suggests the key download is failing silently during the installation process.
+
+---
+
+## Impact
+
+- **Blocks System Updates**: Users must disable the Cursor repository to allow `apt-get update` to complete
+- **Prevents Cursor Updates**: Users cannot receive security patches or bug fixes via APT
+- **Poor User Experience**: Requires manual workarounds that are not documented
+- **Widespread Issue**: This has been reported by multiple users on forums for months
+
+---
+
+## Current Workaround
+
+Users are forced to manually comment out the repository:
+```bash
+sudo sed -i 's/^deb/#deb/' /etc/apt/sources.list.d/cursor.list
+```
+
+This prevents Cursor updates but allows other package management to function.
+
+---
+
+## Recommended Fixes
+
+### Option 1: Fix GPG Key Download URL (Highest Priority)
+- Ensure `https://downloads.cursor.com/aptrepo/gpg.key` returns HTTP 200 with the public key
+- Verify the key file is accessible without authentication
+- Test from multiple locations to ensure it's not blocked
+
+### Option 2: Publish Key to Public Keyservers
+- Upload the GPG public key (ID: `42A1772E62E492D6`) to major keyservers:
+  - keyserver.ubuntu.com
+  - pgp.mit.edu
+  - keys.openpgp.org
+- Verify the key is retrievable via standard GPG commands
+
+### Option 3: Use Modern Keyring Approach
+Update repository configuration to use `signed-by` directive:
+```bash
+deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/cursor.gpg] https://downloads.cursor.com/aptrepo stable main
+```
+
+Ensure the installer properly downloads and installs the key to this location.
+
+### Option 4: Document and Use Working Key Location
+I discovered that `https://downloads.cursor.com/keys/anysphere.asc` successfully returns a valid GPG key. However, this URL is:
+- Not documented in official installation instructions
+- Not automatically used by the installer
+- Only discovered through community forums and troubleshooting
+
+**Recommendation**: 
+- Verify this key matches the repository signing key (ID: 42A1772E62E492D6)
+- Update the installer to use this URL if it's the correct key
+- Document this URL in official installation instructions
+- Ensure the installer properly downloads and installs this key
+
+---
+
+## System Information
+
+- **OS**: Linux Mint (Ubuntu-based)
+- **Issue Duration**: Months to potentially since repository creation
+- **Repository URL**: https://downloads.cursor.com/aptrepo
+- **Key ID**: 42A1772E62E492D6
+- **Repository Status**: Properly signed, but key distribution broken
+
+---
+
+## Verification Steps
+
+To verify this issue on any Linux system:
+
+1. Check repository configuration:
+   ```bash
+   cat /etc/apt/sources.list.d/cursor.list
+   ```
+
+2. Attempt to update package lists:
+   ```bash
+   sudo apt-get update 2>&1 | grep -i cursor
+   ```
+
+3. Check for keyring files:
+   ```bash
+   ls -la /usr/share/keyrings/ | grep cursor
+   ```
+
+4. Verify key file size (should not be 0 bytes):
+   ```bash
+   ls -lh /usr/share/keyrings/cursor.gpg
+   ```
+
+---
+
+## Additional Notes
+
+- The Cursor installer/updater appears to create empty keyring files, suggesting the key download fails during installation
+- The repository itself is functional and properly signed; only key distribution is broken
+- This affects all Linux users who install Cursor via the APT repository method
+- Community forums show this has been an ongoing issue with multiple user reports
+
+---
+
+## Request
+
+I request that the Cursor team:
+1. Investigate and fix the GPG key distribution mechanism
+2. Ensure the key is available via the documented URL and public keyservers
+3. Update the installer to properly download and install the key
+4. Provide clear documentation for manual key installation if needed
+5. Test the fix across multiple Linux distributions
+
+I have attached a detailed technical analysis document (`CURSOR_GPG_KEY_ISSUE.md`) with additional information.
+
+Thank you for your attention to this matter. This issue significantly impacts the user experience for Linux users and should be prioritized for resolution.
+
+Best regards,
+[Your Name]
+
+---
+
+**Attachments:**
+- CURSOR_GPG_KEY_ISSUE.md (detailed technical analysis)
+

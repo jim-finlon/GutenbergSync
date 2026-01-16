@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GutenbergSync - Project Gutenberg Archive Manager</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>GutenbergSync</h1>
+            <p>Project Gutenberg Archive Manager</p>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-button active" data-tab="sync">Sync Status</button>
+            <button class="tab-button" data-tab="search">Search Catalog</button>
+            <button class="tab-button" data-tab="copy">Copy EPUBs</button>
+        </nav>
+
+        <main>
+            <!-- Sync Status Tab -->
+            <div id="sync-tab" class="tab-content active">
+                <div class="section">
+                    <h2>Sync Status</h2>
+                    <div class="status-indicator">
+                        <span class="status-dot" id="status-dot"></span>
+                        <span id="status-text">Not running</span>
+                    </div>
+                    <button id="start-sync-btn" class="btn btn-primary">Start Sync</button>
+                    <div id="sync-progress" class="progress-container"></div>
+                </div>
+            </div>
+
+            <!-- Search Catalog Tab -->
+            <div id="search-tab" class="tab-content">
+                <div class="section">
+                    <h2>Search Catalog</h2>
+                    <div class="catalog-stats" id="catalog-stats"></div>
+                    <form id="search-form">
+                        <input type="text" id="search-query" placeholder="Search titles, authors...">
+                        <input type="text" id="search-author" placeholder="Author name">
+                        <input type="text" id="search-language" placeholder="Language">
+                        <button type="submit" class="btn btn-primary">Search</button>
+                    </form>
+                    <div id="search-results"></div>
+                </div>
+            </div>
+
+            <!-- Copy EPUBs Tab -->
+            <div id="copy-tab" class="tab-content">
+                <div class="section">
+                    <h2>Copy EPUBs</h2>
+                    <form id="copy-form">
+                        <input type="number" id="copy-book-id" placeholder="Book ID" required>
+                        <input type="text" id="copy-destination" placeholder="Destination path" required>
+                        <button type="submit" class="btn btn-primary">Copy EPUB</button>
+                    </form>
+                    <div id="copy-result"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
+

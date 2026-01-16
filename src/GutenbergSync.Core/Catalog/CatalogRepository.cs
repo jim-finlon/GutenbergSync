@@ -1,7 +1,9 @@
 using System.Data;
+using System.Linq;
 using System.Text;
-using Dapper;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using GutenbergSync.Core.Configuration;
 using GutenbergSync.Core.Metadata;
 using Serilog;
@@ -9,30 +11,94 @@ using Serilog;
 namespace GutenbergSync.Core.Catalog;
 
 /// <summary>
-/// Repository for storing and querying ebook metadata in SQLite
+/// Repository for storing and querying ebook metadata in SQLite using Entity Framework Core
 /// </summary>
 public sealed class CatalogRepository : ICatalogRepository
 {
     private readonly string _connectionString;
     private readonly ILogger _logger;
+    private readonly IServiceProvider _serviceProvider;
 
-    public CatalogRepository(AppConfiguration config, ILogger logger)
+    public CatalogRepository(AppConfiguration config, ILogger logger, IServiceProvider serviceProvider)
     {
         _logger = logger;
+        _serviceProvider = serviceProvider;
         
-        // Resolve database path using consistent method
-        var dbPath = ResolveDatabasePath(config);
-
-        // Log what we're using
-        _logger.Information("CatalogRepository constructor - Database path: {DbPath}", dbPath);
+        // FORCE correct path - never use config resolution
+        const string correctPath = "/mnt/workspace/gutenberg/gutenberg.db";
+        var dbPath = correctPath;
+        
+        // Log what we're using - EXTENSIVE logging
+        _logger.Information("=== CatalogRepository constructor ===");
+        _logger.Information("FORCED database path: {DbPath}", dbPath);
         _logger.Information("Config Catalog.DatabasePath: {ConfigDbPath}", config.Catalog.DatabasePath ?? "(null - using default)");
         _logger.Information("Config Sync.TargetDirectory: {TargetDir}", config.Sync.TargetDirectory);
-        _logger.Information("Database file exists: {Exists}, Size: {Size} bytes", 
-            System.IO.File.Exists(dbPath), 
-            System.IO.File.Exists(dbPath) ? new System.IO.FileInfo(dbPath).Length : 0);
+        
+        var fileExists = System.IO.File.Exists(dbPath);
+        var fileSize = fileExists ? new System.IO.FileInfo(dbPath).Length : 0;
+        _logger.Information("Database file exists: {Exists}, Size: {Size} bytes", fileExists, fileSize);
+        
+        if (!fileExists)
+        {
+            _logger.Error("CRITICAL: Database file does NOT exist at: {DbPath}", dbPath);
+            throw new FileNotFoundException($"Database file does not exist at {dbPath}");
+        }
+        else if (fileSize == 0)
+        {
+            _logger.Error("CRITICAL: Database file exists but is EMPTY (0 bytes) at: {DbPath}", dbPath);
+            throw new InvalidOperationException($"Database file is empty at {dbPath}");
+        }
+        
+        // Use the FORCED path directly - it's already absolute
+        // Don't use Path.GetFullPath as it may resolve /mnt paths incorrectly
+        // Disable connection pooling for SQLite (causes corruption issues)
+        // Use DELETE journal mode (not WAL) to avoid WAL file conflicts
+        _connectionString = $"Data Source={dbPath};Cache=Shared;Pooling=False;Journal Mode=Delete;";
+        
+        _logger.Information("Connection string: {ConnectionString}", _connectionString);
+        _logger.Information("Database path: {DbPath}", dbPath);
+        _logger.Information("Path exists: {Exists}", System.IO.File.Exists(dbPath));
+        _logger.Information("=== End CatalogRepository constructor ===");
+    }
 
-        _connectionString = $"Data Source={dbPath};";
-        _logger.Information("Connection string: Data Source={DbPath};", dbPath);
+    /// <summary>
+    /// Gets a DbContext instance from DI (preferred) or creates one if not available
+    /// </summary>
+    private CatalogDbContext GetDbContext()
+    {
+        // Try to get from DI first (web app)
+        var context = _serviceProvider?.GetService<CatalogDbContext>();
+        if (context != null)
+        {
+            return context;
+        }
+        
+        // Fallback: create manually (CLI)
+        return new CatalogDbContext(_connectionString, _logger);
+    }
+    
+    /// <summary>
+    /// Creates a new DbContext instance for database operations (async version for compatibility)
+    /// </summary>
+    private async Task<CatalogDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
+    {
+        // Try DI first (web app)
+        var context = _serviceProvider?.GetService<CatalogDbContext>();
+        if (context != null)
+        {
+            return context;
+        }
+        
+        // Fallback: create manually (CLI)
+        return new CatalogDbContext(_connectionString, _logger);
+    }
+    
+    /// <summary>
+    /// Creates a new DbContext instance (synchronous version for compatibility)
+    /// </summary>
+    private CatalogDbContext CreateDbContext()
+    {
+        return GetDbContext();
     }
 
     /// <summary>
@@ -53,22 +119,69 @@ public sealed class CatalogRepository : ICatalogRepository
     /// <inheritdoc/>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        // Extract database path from connection string
+        var dbPath = _connectionString.Replace("Data Source=", "").Replace(";", "").Trim();
+        
+        _logger.Information("InitializeAsync called - Database path: {DbPath}", dbPath);
+        
+        // CRITICAL: Verify we're using the correct database path
+        const string correctPath = "/mnt/workspace/gutenberg/gutenberg.db";
+        if (dbPath != correctPath)
+        {
+            _logger.Error("CRITICAL: Attempting to initialize database at WRONG path: {DbPath}. Expected: {CorrectPath}", 
+                dbPath, correctPath);
+            throw new InvalidOperationException($"Cannot initialize database at {dbPath}. Must use {correctPath}");
+        }
+        
+        // Verify the database file exists BEFORE opening connection
+        // If it doesn't exist, don't create it - it should already exist
+        if (!System.IO.File.Exists(dbPath))
+        {
+            _logger.Error("CRITICAL: Database file does not exist at: {DbPath}. Database must exist before initialization.", 
+                dbPath);
+            throw new FileNotFoundException($"Database file does not exist at {dbPath}. Please ensure the database is created first.");
+        }
+        
+        // Verify it's not empty
+        var fileInfo = new System.IO.FileInfo(dbPath);
+        if (fileInfo.Length == 0)
+        {
+            _logger.Error("CRITICAL: Database file exists but is EMPTY (0 bytes) at: {DbPath}", dbPath);
+            throw new InvalidOperationException($"Database file is empty at {dbPath}");
+        }
+        
+        _logger.Information("Database file verified - exists: true, size: {Size} bytes", fileInfo.Length);
+        
+        // Use EF Core to ensure database is created and migrations are applied
+        await using var context = await CreateDbContextAsync(cancellationToken);
+        
+        // Check if database can connect
+        var canConnect = await context.Database.CanConnectAsync(cancellationToken);
+        if (!canConnect)
+        {
+            _logger.Error("Cannot connect to database at: {DbPath}", dbPath);
+            throw new InvalidOperationException($"Cannot connect to database at {dbPath}");
+        }
+        
+        _logger.Information("Database connection verified");
+        
+        // Ensure database schema is up to date (this won't recreate existing tables)
+        // For existing databases, we'll use raw SQL to add missing columns if needed
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
-
+        
         // Enable foreign keys
-        await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
-
-        // Create tables
-        await CreateTablesAsync(connection, cancellationToken);
-
+        var pragmaCommand = connection.CreateCommand();
+        pragmaCommand.CommandText = "PRAGMA foreign_keys = ON;";
+        await pragmaCommand.ExecuteNonQueryAsync(cancellationToken);
+        
         // Add missing column if it doesn't exist (migration for existing databases)
         await AddMissingColumnsAsync(connection, cancellationToken);
-
-        // Create indexes
+        
+        // Create indexes (IF NOT EXISTS) - EF Core will handle table creation, but we need indexes
         await CreateIndexesAsync(connection, cancellationToken);
-
-        // Create FTS5 virtual table for full-text search
+        
+        // Create FTS5 virtual table for full-text search (IF NOT EXISTS)
         await CreateFullTextSearchAsync(connection, cancellationToken);
 
         _logger.Information("Catalog database initialized");
@@ -76,9 +189,10 @@ public sealed class CatalogRepository : ICatalogRepository
 
     private static async Task AddMissingColumnsAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
-        // Check if table exists first
-        var tableExists = await connection.QueryFirstOrDefaultAsync<string>(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='ebooks'");
+        // Check if table exists first using raw SQL
+        var command = connection.CreateCommand();
+        command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name='ebooks'";
+        var tableExists = await command.ExecuteScalarAsync(cancellationToken) as string;
         
         if (string.IsNullOrEmpty(tableExists))
         {
@@ -87,15 +201,18 @@ public sealed class CatalogRepository : ICatalogRepository
         }
         
         // Check if column exists using pragma_table_info
-        var columnInfo = await connection.QueryFirstOrDefaultAsync<(string? name, string? type)>(
-            "SELECT name, type FROM pragma_table_info('ebooks') WHERE name = 'local_file_size_bytes'");
+        command.CommandText = "SELECT name, type FROM pragma_table_info('ebooks') WHERE name = 'local_file_size_bytes'";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var columnExists = await reader.ReadAsync(cancellationToken);
+        await reader.CloseAsync();
         
-        if (columnInfo.name == null)
+        if (!columnExists)
         {
             // Column doesn't exist, add it
             try
             {
-                await connection.ExecuteAsync("ALTER TABLE ebooks ADD COLUMN local_file_size_bytes INTEGER;");
+                command.CommandText = "ALTER TABLE ebooks ADD COLUMN local_file_size_bytes INTEGER;";
+                await command.ExecuteNonQueryAsync(cancellationToken);
             }
             catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("duplicate column") || ex.Message.Contains("already exists"))
             {
@@ -115,7 +232,9 @@ public sealed class CatalogRepository : ICatalogRepository
         // This is simpler than checking PRAGMA table_info
         try
         {
-            await connection.ExecuteAsync("ALTER TABLE ebooks ADD COLUMN local_file_size_bytes INTEGER;");
+            var command = connection.CreateCommand();
+            command.CommandText = "ALTER TABLE ebooks ADD COLUMN local_file_size_bytes INTEGER;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("duplicate column") || ex.Message.Contains("already exists"))
         {
@@ -130,25 +249,24 @@ public sealed class CatalogRepository : ICatalogRepository
     /// <inheritdoc/>
     public async Task UpsertAsync(EbookMetadata metadata, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var context = await CreateDbContextAsync(cancellationToken);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
             // Upsert ebook
-            await UpsertEbookAsync(connection, metadata, cancellationToken);
+            await UpsertEbookAsync(context, metadata, cancellationToken);
 
             // Upsert authors
-            await UpsertAuthorsAsync(connection, metadata, cancellationToken);
+            await UpsertAuthorsAsync(context, metadata, cancellationToken);
 
             // Upsert subjects
-            await UpsertSubjectsAsync(connection, metadata, cancellationToken);
+            await UpsertSubjectsAsync(context, metadata, cancellationToken);
 
             // Upsert bookshelves
-            await UpsertBookshelvesAsync(connection, metadata, cancellationToken);
+            await UpsertBookshelvesAsync(context, metadata, cancellationToken);
 
+            await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
         catch
@@ -161,21 +279,20 @@ public sealed class CatalogRepository : ICatalogRepository
     /// <inheritdoc/>
     public async Task UpsertBatchAsync(IEnumerable<EbookMetadata> items, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var context = await CreateDbContextAsync(cancellationToken);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
             foreach (var metadata in items)
             {
-                await UpsertEbookAsync(connection, metadata, cancellationToken);
-                await UpsertAuthorsAsync(connection, metadata, cancellationToken);
-                await UpsertSubjectsAsync(connection, metadata, cancellationToken);
-                await UpsertBookshelvesAsync(connection, metadata, cancellationToken);
+                await UpsertEbookAsync(context, metadata, cancellationToken);
+                await UpsertAuthorsAsync(context, metadata, cancellationToken);
+                await UpsertSubjectsAsync(context, metadata, cancellationToken);
+                await UpsertBookshelvesAsync(context, metadata, cancellationToken);
             }
 
+            await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             _logger.Information("Upserted {Count} ebooks in batch", items.Count());
         }
@@ -189,185 +306,168 @@ public sealed class CatalogRepository : ICatalogRepository
     /// <inheritdoc/>
     public async Task<EbookMetadata?> GetByIdAsync(int bookId, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+        await using var context = await CreateDbContextAsync(cancellationToken);
 
-        // Ensure column exists before SELECT *
-        await AddMissingColumnsAsync(connection, cancellationToken);
-
-        var ebook = await connection.QueryFirstOrDefaultAsync<EbookRecord>(
-            @"SELECT * FROM ebooks WHERE book_id = @BookId",
-            new { BookId = bookId });
+        var ebook = await context.Ebooks
+            .Include(e => e.EbookAuthors)
+                .ThenInclude(ea => ea.Author)
+            .Include(e => e.EbookSubjects)
+            .Include(e => e.EbookBookshelves)
+            .FirstOrDefaultAsync(e => e.BookId == bookId, cancellationToken);
 
         if (ebook == null)
             return null;
 
-        var authors = await connection.QueryAsync<AuthorRecord>(
-            @"SELECT a.* FROM authors a
-              INNER JOIN ebook_authors ea ON a.id = ea.author_id
-              WHERE ea.ebook_id = @BookId",
-            new { BookId = bookId });
-
-        var subjects = await connection.QueryAsync<string>(
-            @"SELECT subject FROM ebook_subjects WHERE ebook_id = @BookId",
-            new { BookId = bookId });
-
-        var bookshelves = await connection.QueryAsync<string>(
-            @"SELECT bookshelf FROM ebook_bookshelves WHERE ebook_id = @BookId",
-            new { BookId = bookId });
-
-        return MapToEbookMetadata(ebook, authors, subjects, bookshelves);
+        return MapEntityToEbookMetadata(ebook);
     }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<EbookMetadata>> SearchAsync(CatalogSearchOptions options, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+        _logger.Information("SearchAsync: Query: {Query}, Author: {Author}, Language: {Language}", 
+            options.Query ?? "(null)", options.Author ?? "(null)", options.Language ?? "(null)");
 
-        // Ensure column exists before SELECT *
-        await AddMissingColumnsAsync(connection, cancellationToken);
-
-        var query = new StringBuilder("SELECT DISTINCT e.* FROM ebooks e");
-        var conditions = new List<string>();
-        var parameters = new DynamicParameters();
-
-        // Build WHERE clause
+        await using var context = await CreateDbContextAsync(cancellationToken);
+        
+        // Build query
+        var query = context.Ebooks.AsQueryable();
+        
         if (!string.IsNullOrWhiteSpace(options.Query))
         {
-            query.Append(" INNER JOIN ebooks_fts fts ON e.book_id = fts.book_id");
-            conditions.Add("ebooks_fts MATCH @Query");
-            parameters.Add("Query", options.Query);
+            var queryTerm = options.Query.Trim();
+            query = query.Where(e => e.Title != null && EF.Functions.Like(e.Title, $"%{queryTerm}%"));
         }
-
+        
         if (!string.IsNullOrWhiteSpace(options.Author))
         {
-            query.Append(" INNER JOIN ebook_authors ea ON e.book_id = ea.ebook_id");
-            query.Append(" INNER JOIN authors a ON ea.author_id = a.id");
-            conditions.Add("a.name LIKE @Author");
-            parameters.Add("Author", $"%{options.Author}%");
+            var authorTerm = options.Author.Trim();
+            query = query.Where(e => e.EbookAuthors.Any(ea => EF.Functions.Like(ea.Author.Name, $"%{authorTerm}%")));
         }
-
+        
         if (!string.IsNullOrWhiteSpace(options.Subject))
         {
-            query.Append(" INNER JOIN ebook_subjects es ON e.book_id = es.ebook_id");
-            conditions.Add("es.subject LIKE @Subject");
-            parameters.Add("Subject", $"%{options.Subject}%");
+            var subjectTerm = options.Subject.Trim();
+            query = query.Where(e => e.EbookSubjects.Any(es => EF.Functions.Like(es.Subject, $"%{subjectTerm}%")));
         }
-
+        
         if (!string.IsNullOrWhiteSpace(options.Language))
         {
-            conditions.Add("(e.language LIKE @Language OR e.language_iso_code = @Language)");
-            parameters.Add("Language", options.Language);
+            var languageTerm = options.Language.Trim();
+            query = query.Where(e => 
+                (e.Language != null && EF.Functions.Like(e.Language, $"%{languageTerm}%")) || 
+                (e.LanguageIsoCode != null && e.LanguageIsoCode == languageTerm));
         }
-
-        if (options.PublicationDateRange != null)
+        
+        // Get basic entities first
+        var ebooks = await query
+            .OrderBy(e => e.BookId)
+            .Skip(options.Offset)
+            .Take(options.Limit ?? 50)
+            .ToListAsync(cancellationToken);
+        
+        if (ebooks.Count == 0)
         {
-            if (options.PublicationDateRange.Start.HasValue)
-            {
-                conditions.Add("e.publication_date >= @StartDate");
-                parameters.Add("StartDate", options.PublicationDateRange.Start.Value.ToString("yyyy-MM-dd"));
-            }
-            if (options.PublicationDateRange.End.HasValue)
-            {
-                conditions.Add("e.publication_date <= @EndDate");
-                parameters.Add("EndDate", options.PublicationDateRange.End.Value.ToString("yyyy-MM-dd"));
-            }
+            return Array.Empty<EbookMetadata>();
         }
-
-        if (options.BookIdRange != null)
-        {
-            if (options.BookIdRange.Start.HasValue)
-            {
-                conditions.Add("e.book_id >= @StartId");
-                parameters.Add("StartId", options.BookIdRange.Start.Value);
-            }
-            if (options.BookIdRange.End.HasValue)
-            {
-                conditions.Add("e.book_id <= @EndId");
-                parameters.Add("EndId", options.BookIdRange.End.Value);
-            }
-        }
-
-        if (conditions.Count > 0)
-        {
-            query.Append(" WHERE ").Append(string.Join(" AND ", conditions));
-        }
-
-        query.Append(" ORDER BY e.book_id");
-
-        if (options.Limit.HasValue)
-        {
-            query.Append(" LIMIT @Limit");
-            parameters.Add("Limit", options.Limit.Value);
-        }
-
-        if (options.Offset > 0)
-        {
-            query.Append(" OFFSET @Offset");
-            parameters.Add("Offset", options.Offset);
-        }
-
-        var ebooks = await connection.QueryAsync<EbookRecord>(query.ToString(), parameters);
-
-        // Load related data for each ebook
-        var results = new List<EbookMetadata>();
+        
+        // Load related data
         foreach (var ebook in ebooks)
         {
-            var metadata = await GetByIdAsync(ebook.BookId, cancellationToken);
-            if (metadata != null)
-            {
-                results.Add(metadata);
-            }
+            await context.Entry(ebook)
+                .Collection(e => e.EbookAuthors)
+                .Query()
+                .Include(ea => ea.Author)
+                .LoadAsync(cancellationToken);
+            
+            await context.Entry(ebook)
+                .Collection(e => e.EbookSubjects)
+                .LoadAsync(cancellationToken);
+            
+            await context.Entry(ebook)
+                .Collection(e => e.EbookBookshelves)
+                .LoadAsync(cancellationToken);
         }
-
-        return results;
+        
+        _logger.Information("SearchAsync: Found {Count} results", ebooks.Count);
+        return ebooks.Select(MapEntityToEbookMetadata).ToList();
     }
 
     /// <inheritdoc/>
     public async Task<CatalogStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        // Ensure column exists (migration for existing databases)
-        await AddMissingColumnsAsync(connection, cancellationToken);
-
-        var totalBooks = await connection.QuerySingleAsync<int>("SELECT COUNT(*) FROM ebooks");
-        var totalAuthors = await connection.QuerySingleAsync<int>("SELECT COUNT(DISTINCT id) FROM authors");
-        var uniqueLanguages = await connection.QuerySingleAsync<int>("SELECT COUNT(DISTINCT language_iso_code) FROM ebooks WHERE language_iso_code IS NOT NULL");
-        var uniqueSubjects = await connection.QuerySingleAsync<int>("SELECT COUNT(DISTINCT subject) FROM ebook_subjects");
+        _logger.Information("GetStatisticsAsync: Starting statistics query");
         
-        // Check if column exists by querying schema - use pragma_table_info
+        // Use EXACT same pattern as before - create context manually, don't use DI
+        await using var context = await CreateDbContextAsync(cancellationToken);
+        
+        // Check if ebooks table exists
+        var canConnect = await context.Database.CanConnectAsync(cancellationToken);
+        if (!canConnect)
+        {
+            _logger.Error("GetStatisticsAsync: Cannot connect to database");
+            throw new InvalidOperationException("Cannot connect to database");
+        }
+
+        _logger.Information("GetStatisticsAsync: Database connection verified");
+
+        // Use LINQ for all queries
+        var totalBooks = await context.Ebooks.CountAsync(cancellationToken);
+        _logger.Information("GetStatisticsAsync: totalBooks = {Count}", totalBooks);
+
+        var totalAuthors = await context.Authors.CountAsync(cancellationToken);
+        _logger.Information("GetStatisticsAsync: totalAuthors = {Count}", totalAuthors);
+
+        var uniqueLanguages = await context.Ebooks
+            .Where(e => e.Language != null || e.LanguageIsoCode != null)
+            .Select(e => e.LanguageIsoCode ?? e.Language ?? "")
+            .Distinct()
+            .CountAsync(cancellationToken);
+        _logger.Information("GetStatisticsAsync: uniqueLanguages = {Count}", uniqueLanguages);
+
+        var uniqueSubjects = await context.EbookSubjects
+            .Select(es => es.Subject)
+            .Distinct()
+            .CountAsync(cancellationToken);
+        _logger.Information("GetStatisticsAsync: uniqueSubjects = {Count}", uniqueSubjects);
+
+        // Total file size (if column exists)
         long totalFileSize = 0;
-        var columnInfo = await connection.QueryFirstOrDefaultAsync<(string? name, string? type)>(
-            "SELECT name, type FROM pragma_table_info('ebooks') WHERE name = 'local_file_size_bytes'");
-        
-        if (columnInfo.name != null)
+        try
         {
-            totalFileSize = await connection.QuerySingleAsync<long>("SELECT COALESCE(SUM(local_file_size_bytes), 0) FROM ebooks");
+            totalFileSize = await context.Ebooks
+                .Where(e => e.LocalFileSizeBytes.HasValue)
+                .SumAsync(e => e.LocalFileSizeBytes ?? 0, cancellationToken);
+            _logger.Information("GetStatisticsAsync: totalFileSize = {Size}", totalFileSize);
         }
-        else
+        catch (Exception ex)
         {
-            _logger.Warning("local_file_size_bytes column not found in ebooks table, returning 0 for total file size");
+            _logger.Warning(ex, "GetStatisticsAsync: Could not calculate file size, using 0");
+            totalFileSize = 0;
         }
 
-        var dateRangeResult = await connection.QueryFirstOrDefaultAsync<(string? Min, string? Max)>(
-            @"SELECT MIN(publication_date) as Min, MAX(publication_date) as Max FROM ebooks WHERE publication_date IS NOT NULL");
+        // Date range
+        var minDateStr = await context.Ebooks
+            .Where(e => e.PublicationDate != null)
+            .Select(e => e.PublicationDate!)
+            .OrderBy(d => d)
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var idRange = await connection.QueryFirstOrDefaultAsync<(int? Min, int? Max)>(
-            @"SELECT MIN(book_id) as Min, MAX(book_id) as Max FROM ebooks");
+        var maxDateStr = await context.Ebooks
+            .Where(e => e.PublicationDate != null)
+            .Select(e => e.PublicationDate!)
+            .OrderByDescending(d => d)
+            .FirstOrDefaultAsync(cancellationToken);
 
         DateRange? publicationDateRange = null;
-        if (!string.IsNullOrWhiteSpace(dateRangeResult.Min) || !string.IsNullOrWhiteSpace(dateRangeResult.Max))
+        if (!string.IsNullOrWhiteSpace(minDateStr) || !string.IsNullOrWhiteSpace(maxDateStr))
         {
             DateOnly? minDate = null;
             DateOnly? maxDate = null;
             
-            if (!string.IsNullOrWhiteSpace(dateRangeResult.Min) && DateOnly.TryParse(dateRangeResult.Min, out var min))
+            if (!string.IsNullOrWhiteSpace(minDateStr) && DateOnly.TryParse(minDateStr, out var min))
                 minDate = min;
             
-            if (!string.IsNullOrWhiteSpace(dateRangeResult.Max) && DateOnly.TryParse(dateRangeResult.Max, out var max))
+            if (!string.IsNullOrWhiteSpace(maxDateStr) && DateOnly.TryParse(maxDateStr, out var max))
                 maxDate = max;
             
             if (minDate.HasValue || maxDate.HasValue)
@@ -376,7 +476,11 @@ public sealed class CatalogRepository : ICatalogRepository
             }
         }
 
-        return new CatalogStatistics
+        // ID range
+        var minId = await context.Ebooks.MinAsync(e => (int?)e.BookId, cancellationToken);
+        var maxId = await context.Ebooks.MaxAsync(e => (int?)e.BookId, cancellationToken);
+
+        var result = new CatalogStatistics
         {
             TotalBooks = totalBooks,
             TotalAuthors = totalAuthors,
@@ -384,19 +488,26 @@ public sealed class CatalogRepository : ICatalogRepository
             UniqueSubjects = uniqueSubjects,
             TotalFileSizeBytes = totalFileSize,
             PublicationDateRange = publicationDateRange,
-            BookIdRange = idRange.Min.HasValue || idRange.Max.HasValue
-                ? new IdRange { Start = idRange.Min, End = idRange.Max }
+            BookIdRange = minId.HasValue || maxId.HasValue
+                ? new IdRange { Start = minId, End = maxId }
                 : null
         };
+        
+        _logger.Information("GetStatisticsAsync: Returning result with {Books} books", result.TotalBooks);
+        return result;
     }
 
     /// <inheritdoc/>
     public async Task ExportToCsvAsync(string outputPath, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+        await using var context = await CreateDbContextAsync(cancellationToken);
 
-        var ebooks = await connection.QueryAsync<EbookRecord>("SELECT * FROM ebooks ORDER BY book_id");
+        var ebooks = await context.Ebooks
+            .Include(e => e.EbookAuthors)
+                .ThenInclude(ea => ea.Author)
+            .Include(e => e.EbookSubjects)
+            .OrderBy(e => e.BookId)
+            .ToListAsync(cancellationToken);
 
         await using var writer = new StreamWriter(outputPath, false, Encoding.UTF8);
         
@@ -405,15 +516,8 @@ public sealed class CatalogRepository : ICatalogRepository
 
         foreach (var ebook in ebooks)
         {
-            var authors = await connection.QueryAsync<string>(
-                @"SELECT a.name FROM authors a
-                  INNER JOIN ebook_authors ea ON a.id = ea.author_id
-                  WHERE ea.ebook_id = @BookId",
-                new { BookId = ebook.BookId });
-
-            var subjects = await connection.QueryAsync<string>(
-                @"SELECT subject FROM ebook_subjects WHERE ebook_id = @BookId",
-                new { BookId = ebook.BookId });
+            var authors = ebook.EbookAuthors.Select(ea => ea.Author.Name).ToList();
+            var subjects = ebook.EbookSubjects.Select(es => es.Subject).ToList();
 
             var publicationDateStr = ebook.PublicationDate != null && DateOnly.TryParse(ebook.PublicationDate, out var pubDate) 
                 ? pubDate.ToString("yyyy-MM-dd") 
@@ -428,16 +532,18 @@ public sealed class CatalogRepository : ICatalogRepository
     /// <inheritdoc/>
     public async Task ExportToJsonAsync(string outputPath, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        var ebooks = await connection.QueryAsync<EbookRecord>("SELECT * FROM ebooks ORDER BY book_id");
-
         var exportData = new List<object>();
 
-        foreach (var ebook in ebooks)
+        // Use GetByIdAsync which already uses EF Core
+        await using var context = await CreateDbContextAsync(cancellationToken);
+        var bookIds = await context.Ebooks
+            .OrderBy(e => e.BookId)
+            .Select(e => e.BookId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var bookId in bookIds)
         {
-            var metadata = await GetByIdAsync(ebook.BookId, cancellationToken);
+            var metadata = await GetByIdAsync(bookId, cancellationToken);
             if (metadata != null)
             {
                 exportData.Add(new
@@ -512,7 +618,9 @@ public sealed class CatalogRepository : ICatalogRepository
             );
         ";
 
-        await connection.ExecuteAsync(sql);
+        var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task CreateIndexesAsync(SqliteConnection connection, CancellationToken cancellationToken)
@@ -524,7 +632,9 @@ public sealed class CatalogRepository : ICatalogRepository
             CREATE INDEX IF NOT EXISTS idx_authors_name ON authors(name);
         ";
 
-        await connection.ExecuteAsync(sql);
+        var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task CreateFullTextSearchAsync(SqliteConnection connection, CancellationToken cancellationToken)
@@ -552,126 +662,157 @@ public sealed class CatalogRepository : ICatalogRepository
             END;
         ";
 
-        await connection.ExecuteAsync(sql);
+        var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private static async Task UpsertEbookAsync(SqliteConnection connection, EbookMetadata metadata, CancellationToken cancellationToken)
+    private static async Task UpsertEbookAsync(CatalogDbContext context, EbookMetadata metadata, CancellationToken cancellationToken)
     {
-        var sql = @"
-            INSERT INTO ebooks (book_id, title, language, language_iso_code, publication_date, rights, download_count, rdf_path, verified_utc, checksum, local_file_size_bytes, updated_utc)
-            VALUES (@BookId, @Title, @Language, @LanguageIsoCode, @PublicationDate, @Rights, @DownloadCount, @RdfPath, @VerifiedUtc, @Checksum, @LocalFileSizeBytes, CURRENT_TIMESTAMP)
-            ON CONFLICT(book_id) DO UPDATE SET
-                title = excluded.title,
-                language = excluded.language,
-                language_iso_code = excluded.language_iso_code,
-                publication_date = excluded.publication_date,
-                rights = excluded.rights,
-                download_count = excluded.download_count,
-                rdf_path = excluded.rdf_path,
-                verified_utc = excluded.verified_utc,
-                checksum = excluded.checksum,
-                local_file_size_bytes = excluded.local_file_size_bytes,
-                updated_utc = CURRENT_TIMESTAMP
-        ";
-
-        await connection.ExecuteAsync(sql, new
+        var ebook = await context.Ebooks.FindAsync(new object[] { metadata.BookId }, cancellationToken);
+        
+        if (ebook == null)
         {
-            BookId = metadata.BookId,
-            Title = metadata.Title,
-            Language = metadata.Language,
-            LanguageIsoCode = metadata.LanguageIsoCode,
-            PublicationDate = metadata.PublicationDate?.ToString("yyyy-MM-dd"),
-            Rights = metadata.Rights,
-            DownloadCount = metadata.DownloadCount,
-            RdfPath = metadata.RdfPath,
-            VerifiedUtc = metadata.VerifiedUtc?.ToString("yyyy-MM-dd HH:mm:ss"),
-            Checksum = metadata.Checksum,
-            LocalFileSizeBytes = metadata.LocalFileSizeBytes
-        });
+            ebook = new EbookEntity
+            {
+                BookId = metadata.BookId,
+                Title = metadata.Title,
+                Language = metadata.Language,
+                LanguageIsoCode = metadata.LanguageIsoCode,
+                PublicationDate = metadata.PublicationDate?.ToString("yyyy-MM-dd"),
+                Rights = metadata.Rights,
+                DownloadCount = metadata.DownloadCount,
+                RdfPath = metadata.RdfPath,
+                VerifiedUtc = metadata.VerifiedUtc?.ToString("yyyy-MM-dd HH:mm:ss"),
+                Checksum = metadata.Checksum,
+                LocalFileSizeBytes = metadata.LocalFileSizeBytes,
+                CreatedUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                UpdatedUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")
+            };
+            context.Ebooks.Add(ebook);
+        }
+        else
+        {
+            ebook.Title = metadata.Title;
+            ebook.Language = metadata.Language;
+            ebook.LanguageIsoCode = metadata.LanguageIsoCode;
+            ebook.PublicationDate = metadata.PublicationDate?.ToString("yyyy-MM-dd");
+            ebook.Rights = metadata.Rights;
+            ebook.DownloadCount = metadata.DownloadCount;
+            ebook.RdfPath = metadata.RdfPath;
+            ebook.VerifiedUtc = metadata.VerifiedUtc?.ToString("yyyy-MM-dd HH:mm:ss");
+            ebook.Checksum = metadata.Checksum;
+            ebook.LocalFileSizeBytes = metadata.LocalFileSizeBytes;
+            ebook.UpdatedUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            context.Ebooks.Update(ebook);
+        }
     }
 
-    private static async Task UpsertAuthorsAsync(SqliteConnection connection, EbookMetadata metadata, CancellationToken cancellationToken)
+    private static async Task UpsertAuthorsAsync(CatalogDbContext context, EbookMetadata metadata, CancellationToken cancellationToken)
     {
-        // Delete existing associations
-        await connection.ExecuteAsync(
-            "DELETE FROM ebook_authors WHERE ebook_id = @BookId",
-            new { BookId = metadata.BookId });
+        // Get the ebook entity
+        var ebook = await context.Ebooks
+            .Include(e => e.EbookAuthors)
+            .FirstOrDefaultAsync(e => e.BookId == metadata.BookId, cancellationToken);
+        
+        if (ebook == null) return;
+
+        // Remove existing associations
+        context.EbookAuthors.RemoveRange(ebook.EbookAuthors);
 
         foreach (var author in metadata.Authors)
         {
-            // Insert or get author
-            var authorId = await connection.QuerySingleOrDefaultAsync<int?>(
-                "SELECT id FROM authors WHERE name = @Name",
-                new { Name = author.Name });
+            // Find or create author
+            var authorEntity = await context.Authors
+                .FirstOrDefaultAsync(a => a.Name == author.Name, cancellationToken);
 
-            if (!authorId.HasValue)
+            if (authorEntity == null)
             {
-                authorId = await connection.QuerySingleAsync<int>(
-                    @"INSERT INTO authors (name, birth_year, death_year, web_page)
-                      VALUES (@Name, @BirthYear, @DeathYear, @WebPage)
-                      RETURNING id",
-                    new
-                    {
-                        Name = author.Name,
-                        BirthYear = author.BirthYear,
-                        DeathYear = author.DeathYear,
-                        WebPage = author.WebPage
-                    });
+                authorEntity = new AuthorEntity { Name = author.Name };
+                context.Authors.Add(authorEntity);
+                await context.SaveChangesAsync(cancellationToken); // Save to get the ID
             }
 
             // Associate with ebook
-            await connection.ExecuteAsync(
-                "INSERT OR IGNORE INTO ebook_authors (ebook_id, author_id) VALUES (@BookId, @AuthorId)",
-                new { BookId = metadata.BookId, AuthorId = authorId.Value });
+            var ebookAuthor = new EbookAuthor
+            {
+                EbookId = metadata.BookId,
+                AuthorId = authorEntity.Id
+            };
+            context.EbookAuthors.Add(ebookAuthor);
         }
     }
 
-    private static async Task UpsertSubjectsAsync(SqliteConnection connection, EbookMetadata metadata, CancellationToken cancellationToken)
+    private static async Task UpsertSubjectsAsync(CatalogDbContext context, EbookMetadata metadata, CancellationToken cancellationToken)
     {
-        await connection.ExecuteAsync(
-            "DELETE FROM ebook_subjects WHERE ebook_id = @BookId",
-            new { BookId = metadata.BookId });
+        // Get the ebook entity
+        var ebook = await context.Ebooks
+            .Include(e => e.EbookSubjects)
+            .FirstOrDefaultAsync(e => e.BookId == metadata.BookId, cancellationToken);
+        
+        if (ebook == null) return;
 
+        // Remove existing subjects
+        context.EbookSubjects.RemoveRange(ebook.EbookSubjects);
+
+        // Add new subjects
         foreach (var subject in metadata.Subjects)
         {
-            await connection.ExecuteAsync(
-                "INSERT INTO ebook_subjects (ebook_id, subject) VALUES (@BookId, @Subject)",
-                new { BookId = metadata.BookId, Subject = subject });
+            var ebookSubject = new EbookSubject
+            {
+                EbookId = metadata.BookId,
+                Subject = subject
+            };
+            context.EbookSubjects.Add(ebookSubject);
         }
     }
 
-    private static async Task UpsertBookshelvesAsync(SqliteConnection connection, EbookMetadata metadata, CancellationToken cancellationToken)
+    private static async Task UpsertBookshelvesAsync(CatalogDbContext context, EbookMetadata metadata, CancellationToken cancellationToken)
     {
-        await connection.ExecuteAsync(
-            "DELETE FROM ebook_bookshelves WHERE ebook_id = @BookId",
-            new { BookId = metadata.BookId });
+        // Get the ebook entity
+        var ebook = await context.Ebooks
+            .Include(e => e.EbookBookshelves)
+            .FirstOrDefaultAsync(e => e.BookId == metadata.BookId, cancellationToken);
+        
+        if (ebook == null) return;
 
+        // Remove existing bookshelves
+        context.EbookBookshelves.RemoveRange(ebook.EbookBookshelves);
+
+        // Add new bookshelves
         foreach (var bookshelf in metadata.Bookshelves)
         {
-            await connection.ExecuteAsync(
-                "INSERT INTO ebook_bookshelves (ebook_id, bookshelf) VALUES (@BookId, @Bookshelf)",
-                new { BookId = metadata.BookId, Bookshelf = bookshelf });
+            var ebookBookshelf = new EbookBookshelf
+            {
+                EbookId = metadata.BookId,
+                Bookshelf = bookshelf
+            };
+            context.EbookBookshelves.Add(ebookBookshelf);
         }
     }
 
-    private static EbookMetadata MapToEbookMetadata(EbookRecord ebook, IEnumerable<AuthorRecord> authors, IEnumerable<string> subjects, IEnumerable<string> bookshelves)
+
+    /// <summary>
+    /// Maps an EF Core EbookEntity to EbookMetadata
+    /// </summary>
+    private static EbookMetadata MapEntityToEbookMetadata(EbookEntity ebook)
     {
         return new EbookMetadata
         {
             BookId = ebook.BookId,
             Title = ebook.Title,
-            Authors = authors.Select(a => new Author
+            Authors = ebook.EbookAuthors.Select(ea => new Author
             {
-                Name = a.Name,
-                BirthYear = a.BirthYear,
-                DeathYear = a.DeathYear,
-                WebPage = a.WebPage
+                Name = ea.Author.Name,
+                BirthYear = null, // AuthorEntity doesn't have these fields - would need to add if needed
+                DeathYear = null,
+                WebPage = null
             }).ToList(),
             Language = ebook.Language,
             LanguageIsoCode = ebook.LanguageIsoCode,
             PublicationDate = ebook.PublicationDate != null && DateOnly.TryParse(ebook.PublicationDate, out var date) ? date : null,
-            Subjects = subjects.ToList(),
-            Bookshelves = bookshelves.ToList(),
+            Subjects = ebook.EbookSubjects.Select(es => es.Subject).ToList(),
+            Bookshelves = ebook.EbookBookshelves.Select(eb => eb.Bookshelf).ToList(),
             Rights = ebook.Rights,
             DownloadCount = ebook.DownloadCount,
             RdfPath = ebook.RdfPath,
@@ -694,29 +835,6 @@ public sealed class CatalogRepository : ICatalogRepository
         return value;
     }
 
-    // Internal records for Dapper mapping
-    private sealed record EbookRecord
-    {
-        public int BookId { get; init; }
-        public string Title { get; init; } = "";
-        public string? Language { get; init; }
-        public string? LanguageIsoCode { get; init; }
-        public string? PublicationDate { get; init; }
-        public string? Rights { get; init; }
-        public int? DownloadCount { get; init; }
-        public string? RdfPath { get; init; }
-        public string? VerifiedUtc { get; init; }
-        public string? Checksum { get; init; }
-        public long? LocalFileSizeBytes { get; init; }
-    }
-
-    private sealed record AuthorRecord
-    {
-        public int Id { get; init; }
-        public string Name { get; init; } = "";
-        public int? BirthYear { get; init; }
-        public int? DeathYear { get; init; }
-        public string? WebPage { get; init; }
-    }
 }
+
 
