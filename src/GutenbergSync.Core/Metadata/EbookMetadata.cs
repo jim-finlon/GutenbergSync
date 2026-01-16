@@ -69,5 +69,10 @@ public sealed record EbookMetadata
     /// File checksum (SHA-256) for verification
     /// </summary>
     public string? Checksum { get; init; }
+
+    /// <summary>
+    /// Local file size in bytes (if file exists locally)
+    /// </summary>
+    public long? LocalFileSizeBytes { get; init; }
 }
 

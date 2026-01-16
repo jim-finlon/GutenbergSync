@@ -558,8 +558,8 @@ public sealed class CatalogRepository : ICatalogRepository
     private static async Task UpsertEbookAsync(SqliteConnection connection, EbookMetadata metadata, CancellationToken cancellationToken)
     {
         var sql = @"
-            INSERT INTO ebooks (book_id, title, language, language_iso_code, publication_date, rights, download_count, rdf_path, verified_utc, checksum, updated_utc)
-            VALUES (@BookId, @Title, @Language, @LanguageIsoCode, @PublicationDate, @Rights, @DownloadCount, @RdfPath, @VerifiedUtc, @Checksum, CURRENT_TIMESTAMP)
+            INSERT INTO ebooks (book_id, title, language, language_iso_code, publication_date, rights, download_count, rdf_path, verified_utc, checksum, local_file_size_bytes, updated_utc)
+            VALUES (@BookId, @Title, @Language, @LanguageIsoCode, @PublicationDate, @Rights, @DownloadCount, @RdfPath, @VerifiedUtc, @Checksum, @LocalFileSizeBytes, CURRENT_TIMESTAMP)
             ON CONFLICT(book_id) DO UPDATE SET
                 title = excluded.title,
                 language = excluded.language,
@@ -570,6 +570,7 @@ public sealed class CatalogRepository : ICatalogRepository
                 rdf_path = excluded.rdf_path,
                 verified_utc = excluded.verified_utc,
                 checksum = excluded.checksum,
+                local_file_size_bytes = excluded.local_file_size_bytes,
                 updated_utc = CURRENT_TIMESTAMP
         ";
 
@@ -584,7 +585,8 @@ public sealed class CatalogRepository : ICatalogRepository
             DownloadCount = metadata.DownloadCount,
             RdfPath = metadata.RdfPath,
             VerifiedUtc = metadata.VerifiedUtc?.ToString("yyyy-MM-dd HH:mm:ss"),
-            Checksum = metadata.Checksum
+            Checksum = metadata.Checksum,
+            LocalFileSizeBytes = metadata.LocalFileSizeBytes
         });
     }
 
@@ -674,7 +676,8 @@ public sealed class CatalogRepository : ICatalogRepository
             DownloadCount = ebook.DownloadCount,
             RdfPath = ebook.RdfPath,
             VerifiedUtc = ebook.VerifiedUtc != null && DateTime.TryParse(ebook.VerifiedUtc, null, System.Globalization.DateTimeStyles.None, out var verified) ? verified : null,
-            Checksum = ebook.Checksum
+            Checksum = ebook.Checksum,
+            LocalFileSizeBytes = ebook.LocalFileSizeBytes
         };
     }
 
@@ -704,6 +707,7 @@ public sealed class CatalogRepository : ICatalogRepository
         public string? RdfPath { get; init; }
         public string? VerifiedUtc { get; init; }
         public string? Checksum { get; init; }
+        public long? LocalFileSizeBytes { get; init; }
     }
 
     private sealed record AuthorRecord
