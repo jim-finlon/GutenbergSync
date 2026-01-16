@@ -1,6 +1,6 @@
 {
   "Sync": {
-    "TargetDirectory": "/home/jfinlon/gutenberg",
+    "TargetDirectory": "/mnt/workspace/gutenberg",
     "Preset": "text-epub",
     "Mirrors": [
       {

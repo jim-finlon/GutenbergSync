@@ -20,22 +20,34 @@ public sealed class CatalogRepository : ICatalogRepository
     {
         _logger = logger;
         
-        // Resolve database path
-        var dbPath = config.Catalog.DatabasePath;
-        if (string.IsNullOrWhiteSpace(dbPath))
-        {
-            dbPath = Path.Combine(config.Sync.TargetDirectory, "gutenberg.db");
-        }
+        // Resolve database path using consistent method
+        var dbPath = ResolveDatabasePath(config);
 
-        // Ensure directory exists
-        var dbDir = Path.GetDirectoryName(dbPath);
-        if (!string.IsNullOrWhiteSpace(dbDir) && !Directory.Exists(dbDir))
-        {
-            Directory.CreateDirectory(dbDir);
-        }
+        // Log what we're using
+        _logger.Information("CatalogRepository constructor - Database path: {DbPath}", dbPath);
+        _logger.Information("Config Catalog.DatabasePath: {ConfigDbPath}", config.Catalog.DatabasePath ?? "(null - using default)");
+        _logger.Information("Config Sync.TargetDirectory: {TargetDir}", config.Sync.TargetDirectory);
+        _logger.Information("Database file exists: {Exists}, Size: {Size} bytes", 
+            System.IO.File.Exists(dbPath), 
+            System.IO.File.Exists(dbPath) ? new System.IO.FileInfo(dbPath).Length : 0);
 
         _connectionString = $"Data Source={dbPath};";
-        _logger.Information("Catalog database: {DbPath}", dbPath);
+        _logger.Information("Connection string: Data Source={DbPath};", dbPath);
+    }
+
+    /// <summary>
+    /// Resolves the database path from configuration using consistent logic:
+    /// 1. Use Catalog.DatabasePath if explicitly set
+    /// 2. Otherwise use Sync.TargetDirectory + "gutenberg.db"
+    /// </summary>
+    private static string ResolveDatabasePath(AppConfiguration config)
+    {
+        if (!string.IsNullOrWhiteSpace(config.Catalog.DatabasePath))
+        {
+            return config.Catalog.DatabasePath;
+        }
+        
+        return Path.Combine(config.Sync.TargetDirectory, "gutenberg.db");
     }
 
     /// <inheritdoc/>
@@ -50,6 +62,9 @@ public sealed class CatalogRepository : ICatalogRepository
         // Create tables
         await CreateTablesAsync(connection, cancellationToken);
 
+        // Add missing column if it doesn't exist (migration for existing databases)
+        await AddMissingColumnsAsync(connection, cancellationToken);
+
         // Create indexes
         await CreateIndexesAsync(connection, cancellationToken);
 
@@ -57,6 +72,59 @@ public sealed class CatalogRepository : ICatalogRepository
         await CreateFullTextSearchAsync(connection, cancellationToken);
 
         _logger.Information("Catalog database initialized");
+    }
+
+    private static async Task AddMissingColumnsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        // Check if table exists first
+        var tableExists = await connection.QueryFirstOrDefaultAsync<string>(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='ebooks'");
+        
+        if (string.IsNullOrEmpty(tableExists))
+        {
+            // Table doesn't exist yet, it will be created with the column
+            return;
+        }
+        
+        // Check if column exists using pragma_table_info
+        var columnInfo = await connection.QueryFirstOrDefaultAsync<(string? name, string? type)>(
+            "SELECT name, type FROM pragma_table_info('ebooks') WHERE name = 'local_file_size_bytes'");
+        
+        if (columnInfo.name == null)
+        {
+            // Column doesn't exist, add it
+            try
+            {
+                await connection.ExecuteAsync("ALTER TABLE ebooks ADD COLUMN local_file_size_bytes INTEGER;");
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("duplicate column") || ex.Message.Contains("already exists"))
+            {
+                // Column already exists, ignore
+            }
+            catch (Exception)
+            {
+                // Any other error - log but continue, column might be in wrong state
+                // This is a migration, so we want to be lenient
+            }
+        }
+    }
+
+    private static async Task EnsureColumnExistsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        // Try to add the column - SQLite will error if it already exists, which we ignore
+        // This is simpler than checking PRAGMA table_info
+        try
+        {
+            await connection.ExecuteAsync("ALTER TABLE ebooks ADD COLUMN local_file_size_bytes INTEGER;");
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.Message.Contains("duplicate column") || ex.Message.Contains("already exists"))
+        {
+            // Column already exists, that's fine
+        }
+        catch
+        {
+            // Table might not exist yet, that's also fine - it will be created with the column
+        }
     }
 
     /// <inheritdoc/>
@@ -124,6 +192,9 @@ public sealed class CatalogRepository : ICatalogRepository
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
 
+        // Ensure column exists before SELECT *
+        await AddMissingColumnsAsync(connection, cancellationToken);
+
         var ebook = await connection.QueryFirstOrDefaultAsync<EbookRecord>(
             @"SELECT * FROM ebooks WHERE book_id = @BookId",
             new { BookId = bookId });
@@ -153,6 +224,9 @@ public sealed class CatalogRepository : ICatalogRepository
     {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
+
+        // Ensure column exists before SELECT *
+        await AddMissingColumnsAsync(connection, cancellationToken);
 
         var query = new StringBuilder("SELECT DISTINCT e.* FROM ebooks e");
         var conditions = new List<string>();
@@ -256,17 +330,51 @@ public sealed class CatalogRepository : ICatalogRepository
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
 
+        // Ensure column exists (migration for existing databases)
+        await AddMissingColumnsAsync(connection, cancellationToken);
+
         var totalBooks = await connection.QuerySingleAsync<int>("SELECT COUNT(*) FROM ebooks");
         var totalAuthors = await connection.QuerySingleAsync<int>("SELECT COUNT(DISTINCT id) FROM authors");
         var uniqueLanguages = await connection.QuerySingleAsync<int>("SELECT COUNT(DISTINCT language_iso_code) FROM ebooks WHERE language_iso_code IS NOT NULL");
         var uniqueSubjects = await connection.QuerySingleAsync<int>("SELECT COUNT(DISTINCT subject) FROM ebook_subjects");
-        var totalFileSize = await connection.QuerySingleAsync<long>("SELECT COALESCE(SUM(local_file_size_bytes), 0) FROM ebooks");
+        
+        // Check if column exists by querying schema - use pragma_table_info
+        long totalFileSize = 0;
+        var columnInfo = await connection.QueryFirstOrDefaultAsync<(string? name, string? type)>(
+            "SELECT name, type FROM pragma_table_info('ebooks') WHERE name = 'local_file_size_bytes'");
+        
+        if (columnInfo.name != null)
+        {
+            totalFileSize = await connection.QuerySingleAsync<long>("SELECT COALESCE(SUM(local_file_size_bytes), 0) FROM ebooks");
+        }
+        else
+        {
+            _logger.Warning("local_file_size_bytes column not found in ebooks table, returning 0 for total file size");
+        }
 
-        var dateRange = await connection.QueryFirstOrDefaultAsync<(DateOnly? Min, DateOnly? Max)>(
+        var dateRangeResult = await connection.QueryFirstOrDefaultAsync<(string? Min, string? Max)>(
             @"SELECT MIN(publication_date) as Min, MAX(publication_date) as Max FROM ebooks WHERE publication_date IS NOT NULL");
 
         var idRange = await connection.QueryFirstOrDefaultAsync<(int? Min, int? Max)>(
             @"SELECT MIN(book_id) as Min, MAX(book_id) as Max FROM ebooks");
+
+        DateRange? publicationDateRange = null;
+        if (!string.IsNullOrWhiteSpace(dateRangeResult.Min) || !string.IsNullOrWhiteSpace(dateRangeResult.Max))
+        {
+            DateOnly? minDate = null;
+            DateOnly? maxDate = null;
+            
+            if (!string.IsNullOrWhiteSpace(dateRangeResult.Min) && DateOnly.TryParse(dateRangeResult.Min, out var min))
+                minDate = min;
+            
+            if (!string.IsNullOrWhiteSpace(dateRangeResult.Max) && DateOnly.TryParse(dateRangeResult.Max, out var max))
+                maxDate = max;
+            
+            if (minDate.HasValue || maxDate.HasValue)
+            {
+                publicationDateRange = new DateRange { Start = minDate, End = maxDate };
+            }
+        }
 
         return new CatalogStatistics
         {
@@ -275,9 +383,7 @@ public sealed class CatalogRepository : ICatalogRepository
             UniqueLanguages = uniqueLanguages,
             UniqueSubjects = uniqueSubjects,
             TotalFileSizeBytes = totalFileSize,
-            PublicationDateRange = dateRange.Min.HasValue || dateRange.Max.HasValue
-                ? new DateRange { Start = dateRange.Min, End = dateRange.Max }
-                : null,
+            PublicationDateRange = publicationDateRange,
             BookIdRange = idRange.Min.HasValue || idRange.Max.HasValue
                 ? new IdRange { Start = idRange.Min, End = idRange.Max }
                 : null
@@ -373,6 +479,7 @@ public sealed class CatalogRepository : ICatalogRepository
                 rdf_path TEXT,
                 verified_utc TEXT,
                 checksum TEXT,
+                local_file_size_bytes INTEGER,
                 created_utc TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_utc TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
