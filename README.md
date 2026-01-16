@@ -271,6 +271,94 @@ gutenberg-sync catalog search --author "Shakespeare"
 gutenberg-sync catalog export catalog.json --format json
 ```
 
+### 5. Web Application
+
+GutenbergSync includes a web UI for browsing the catalog, monitoring sync progress, and copying EPUBs.
+
+**Starting the Web Server:**
+
+```bash
+# From the project root directory
+cd "/home/jfinlon/Documents/Projects/Gutenberg Archive"
+dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
+```
+
+The web application will be available at `http://localhost:5001`.
+
+**Important: Killing Old Processes Before Restarting**
+
+If you encounter "address already in use" errors or the server isn't responding, kill any existing processes first:
+
+```bash
+# Kill all GutenbergSync processes
+pkill -9 -f "dotnet.*GutenbergSync"
+
+# Wait a moment for processes to terminate
+sleep 2
+
+# Then start the server
+cd "/home/jfinlon/Documents/Projects/Gutenberg Archive"
+dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
+```
+
+**One-liner to kill and restart:**
+
+```bash
+pkill -9 -f "dotnet.*GutenbergSync" 2>/dev/null; pkill -9 -f "GutenbergSync.Web" 2>/dev/null; pkill -9 -f "Gutenberg" 2>/dev/null; sleep 3; cd "/home/jfinlon/Documents/Projects/Gutenberg Archive" && dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
+```
+
+**Troubleshooting "address already in use" errors:**
+
+If you still get "address already in use" errors, try these steps in order:
+
+1. **Kill all related processes (including compiled executables):**
+```bash
+pkill -9 -f "dotnet.*GutenbergSync" 2>/dev/null
+pkill -9 -f "GutenbergSync.Web" 2>/dev/null
+pkill -9 -f "Gutenberg" 2>/dev/null
+pkill -9 -f "dotnet" 2>/dev/null
+sleep 3
+```
+
+2. **Check what's using port 5001:**
+```bash
+lsof -i :5001 || netstat -tulpn | grep :5001 || ss -tulpn | grep :5001
+```
+
+3. **Kill the specific process using port 5001 (if found):**
+```bash
+# Replace PID with the process ID from step 2
+kill -9 <PID>
+# Or use fuser to kill by port (if available):
+fuser -k 5001/tcp 2>/dev/null
+sleep 2
+```
+
+4. **Then start the server:**
+```bash
+cd "/home/jfinlon/Documents/Projects/Gutenberg Archive"
+dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
+```
+
+**Alternative: Use a different port**
+
+If port 5001 is persistently unavailable, you can use a different port:
+```bash
+dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5002"
+```
+
+**Web Application Features:**
+
+- **Search Catalog**: Search ebooks by title, author, language, or subject
+- **Sync Status**: Monitor sync progress in real-time with progress bars and file counts
+- **Copy EPUBs**: Select multiple books from search results and copy them to a chosen folder with formatted filenames (`{Author Name}-{Book Title}.epub`)
+- **Statistics**: View catalog statistics (total books, authors, languages, subjects)
+
+The web application automatically finds `config.json` by searching:
+1. Current working directory
+2. Parent directories (useful when running from `bin/Debug/net9.0`)
+3. Hardcoded absolute path as fallback
+
 ## Configuration
 
 ### Configuration File

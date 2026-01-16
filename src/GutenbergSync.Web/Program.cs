@@ -23,10 +23,48 @@ AppConfiguration config;
 
 try
 {
-    // ALWAYS use the absolute path to config.json in the project root
-    var configPath = "/home/jfinlon/Documents/Projects/Gutenberg Archive/config.json";
+    // Try multiple strategies to find config.json:
+    // 1. Current working directory
+    // 2. Parent directories (if running from src/GutenbergSync.Web/bin/Debug)
+    // 3. Hardcoded absolute path as last resort
+    var configPath = "config.json";
+    var found = false;
     
     if (File.Exists(configPath))
+    {
+        configPath = Path.GetFullPath(configPath);
+        found = true;
+    }
+    else
+    {
+        // Try parent directories (common when running from bin/Debug/net9.0)
+        var currentDir = Directory.GetCurrentDirectory();
+        var dir = new DirectoryInfo(currentDir);
+        for (int i = 0; i < 5 && dir != null; i++)
+        {
+            var testPath = Path.Combine(dir.FullName, "config.json");
+            if (File.Exists(testPath))
+            {
+                configPath = testPath;
+                found = true;
+                break;
+            }
+            dir = dir.Parent;
+        }
+    }
+    
+    // Last resort: hardcoded absolute path
+    if (!found)
+    {
+        var absolutePath = "/home/jfinlon/Documents/Projects/Gutenberg Archive/config.json";
+        if (File.Exists(absolutePath))
+        {
+            configPath = absolutePath;
+            found = true;
+        }
+    }
+    
+    if (found && File.Exists(configPath))
     {
         tempLogger.Information("Loading config from: {ConfigPath}", configPath);
         config = await configLoader.LoadFromFileAsync(configPath);
@@ -147,6 +185,7 @@ try
         logger.Information("InitializeAsync completed");
         
         // Test query to verify database has data
+        // Note: This is done within the scope, so the repository can create its own context
         try
         {
             logger.Information("Testing database query...");
@@ -177,13 +216,17 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
-app.UseDefaultFiles();
-app.UseStaticFiles();
 
+// Map API routes and hubs FIRST - these must be registered before static files
 app.MapControllers();
 app.MapHub<SyncProgressHub>("/hubs/sync");
 
+// Static files
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 // Fallback to index.html for SPA routing
+// Note: This will only match if no other route matched, so API routes take precedence
 app.MapFallbackToFile("index.html");
 
 app.Run();

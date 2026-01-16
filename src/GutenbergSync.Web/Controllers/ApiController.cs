@@ -24,18 +24,11 @@ public class ApiController : ControllerBase
         AppConfiguration config,
         ILoggerFactory loggerFactory)
     {
-        Console.WriteLine("=== ApiController constructor called ===");
-        
         _catalog = catalog;
         _syncService = syncService;
         _epubCopy = epubCopy;
         _config = config;
         _logger = loggerFactory.CreateLogger<ApiController>();
-        
-        // Now safe to use _logger
-        _logger.LogInformation("=== ApiController constructor called ===");
-        Console.WriteLine("=== ApiController constructor completed ===");
-        _logger.LogInformation("=== ApiController constructor completed ===");
     }
 
     [HttpGet("statistics")]
@@ -151,6 +144,61 @@ public class ApiController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error copying EPUB");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("browse")]
+    public async Task<ActionResult> BrowseDirectories([FromQuery] string? path = null)
+    {
+        await Task.CompletedTask; // Make it truly async
+        try
+        {
+            // Default to home directory if no path provided
+            var basePath = path ?? "/home/jfinlon";
+            
+            // Security: Only allow browsing under /home/jfinlon
+            if (!basePath.StartsWith("/home/jfinlon"))
+            {
+                return BadRequest(new { error = "Access denied. Can only browse /home/jfinlon directory." });
+            }
+            
+            if (!Directory.Exists(basePath))
+            {
+                return NotFound(new { error = "Directory not found" });
+            }
+            
+            var directories = Directory.GetDirectories(basePath)
+                .Select(d => new
+                {
+                    name = Path.GetFileName(d),
+                    path = d,
+                    isDirectory = true
+                })
+                .OrderBy(d => d.name)
+                .ToList();
+            
+            var parentPath = Directory.GetParent(basePath)?.FullName;
+            // Only show parent if it's still within /home/jfinlon (don't allow going above home)
+            if (parentPath != null && parentPath.StartsWith("/home/jfinlon") && parentPath.Length >= "/home/jfinlon".Length)
+            {
+                directories.Insert(0, new
+                {
+                    name = "..",
+                    path = parentPath,
+                    isDirectory = true
+                });
+            }
+            
+            return Ok(new
+            {
+                currentPath = basePath,
+                directories = directories
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error browsing directories");
             return StatusCode(500, new { error = ex.Message });
         }
     }

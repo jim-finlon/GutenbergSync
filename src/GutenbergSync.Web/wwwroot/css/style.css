@@ -244,3 +244,7 @@ form input:focus {
     border: 1px solid #f5c6cb;
 }
 
+.browser-item:hover {
+    background: #f0f0f0 !important;
+}
+

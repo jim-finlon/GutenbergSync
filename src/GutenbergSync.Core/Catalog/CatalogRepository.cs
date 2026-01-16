@@ -52,8 +52,8 @@ public sealed class CatalogRepository : ICatalogRepository
         // Use the FORCED path directly - it's already absolute
         // Don't use Path.GetFullPath as it may resolve /mnt paths incorrectly
         // Disable connection pooling for SQLite (causes corruption issues)
-        // Use DELETE journal mode (not WAL) to avoid WAL file conflicts
-        _connectionString = $"Data Source={dbPath};Cache=Shared;Pooling=False;Journal Mode=Delete;";
+        // Note: PRAGMA settings (journal_mode, etc.) must be set after connection opens, not in connection string
+        _connectionString = $"Data Source={dbPath};Cache=Shared;Pooling=False;";
         
         _logger.Information("Connection string: {ConnectionString}", _connectionString);
         _logger.Information("Database path: {DbPath}", dbPath);
@@ -79,18 +79,26 @@ public sealed class CatalogRepository : ICatalogRepository
     
     /// <summary>
     /// Creates a new DbContext instance for database operations (async version for compatibility)
+    /// Always creates a new context to avoid disposal issues with DI-managed contexts
     /// </summary>
     private async Task<CatalogDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
     {
-        // Try DI first (web app)
-        var context = _serviceProvider?.GetService<CatalogDbContext>();
-        if (context != null)
+        // Always create a new context manually to avoid disposal issues
+        // DI contexts should not be disposed manually with 'await using'
+        var context = new CatalogDbContext(_connectionString, _logger);
+        
+        // Set PRAGMA settings on the underlying connection
+        var connection = context.Database.GetDbConnection();
+        if (connection.State != System.Data.ConnectionState.Open)
         {
-            return context;
+            await connection.OpenAsync(cancellationToken);
         }
         
-        // Fallback: create manually (CLI)
-        return new CatalogDbContext(_connectionString, _logger);
+        using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;";
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        
+        return context;
     }
     
     /// <summary>
@@ -120,7 +128,19 @@ public sealed class CatalogRepository : ICatalogRepository
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         // Extract database path from connection string
-        var dbPath = _connectionString.Replace("Data Source=", "").Replace(";", "").Trim();
+        // Extract database path from connection string properly
+        var dbPath = _connectionString;
+        if (dbPath.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase))
+        {
+            dbPath = dbPath.Substring("Data Source=".Length);
+            // Find the first semicolon (if any) and take everything before it
+            var semicolonIndex = dbPath.IndexOf(';');
+            if (semicolonIndex >= 0)
+            {
+                dbPath = dbPath.Substring(0, semicolonIndex);
+            }
+            dbPath = dbPath.Trim();
+        }
         
         _logger.Information("InitializeAsync called - Database path: {DbPath}", dbPath);
         
@@ -170,9 +190,9 @@ public sealed class CatalogRepository : ICatalogRepository
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         
-        // Enable foreign keys
+        // Set PRAGMA settings
         var pragmaCommand = connection.CreateCommand();
-        pragmaCommand.CommandText = "PRAGMA foreign_keys = ON;";
+        pragmaCommand.CommandText = "PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;";
         await pragmaCommand.ExecuteNonQueryAsync(cancellationToken);
         
         // Add missing column if it doesn't exist (migration for existing databases)

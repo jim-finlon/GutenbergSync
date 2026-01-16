@@ -249,7 +249,7 @@ function populateCopyTab(books) {
         </div>
         <div>
             <label for="copy-destination">Destination Folder:</label>
-            <input type="text" id="copy-destination" placeholder="/path/to/destination" required style="width: 100%; margin: 5px 0;">
+            <input type="text" id="copy-destination" placeholder="/path/to/destination" required style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; margin: 5px 0;">
             <button id="copy-all-btn" class="btn btn-primary" style="margin-top: 10px;">Copy All Selected Books</button>
         </div>
     `;
