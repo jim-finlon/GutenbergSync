@@ -4,6 +4,7 @@ using GutenbergSync.Core.Configuration;
 using GutenbergSync.Core.Sync;
 using GutenbergSync.Web.Models;
 using GutenbergSync.Web.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GutenbergSync.Web.Controllers;
 
@@ -12,20 +13,20 @@ namespace GutenbergSync.Web.Controllers;
 public class ApiController : ControllerBase
 {
     private readonly ICatalogRepository _catalog;
-    private readonly WebSyncService _syncService;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IEpubCopyService _epubCopy;
     private readonly AppConfiguration _config;
     private readonly ILogger<ApiController> _logger;
 
     public ApiController(
         ICatalogRepository catalog,
-        WebSyncService syncService,
+        IServiceScopeFactory scopeFactory,
         IEpubCopyService epubCopy,
         AppConfiguration config,
         ILoggerFactory loggerFactory)
     {
         _catalog = catalog;
-        _syncService = syncService;
+        _scopeFactory = scopeFactory;
         _epubCopy = epubCopy;
         _config = config;
         _logger = loggerFactory.CreateLogger<ApiController>();
@@ -107,12 +108,16 @@ public class ApiController : ControllerBase
     {
         try
         {
-            // Run sync in background
+            // Run sync in background with its own service scope
             _ = Task.Run(async () =>
             {
+                // Create a new scope for the background task
+                using var scope = _scopeFactory.CreateScope();
+                var syncService = scope.ServiceProvider.GetRequiredService<WebSyncService>();
+                
                 try
                 {
-                    await _syncService.StartSyncAsync(cancellationToken);
+                    await syncService.StartSyncAsync(cancellationToken);
                 }
                 catch (Exception ex)
                 {
