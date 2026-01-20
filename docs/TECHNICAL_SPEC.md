@@ -157,8 +157,6 @@ GutenbergSync/
 │   │   │   ├── ICatalogRepository.cs
 │   │   │   ├── SqliteCatalogRepository.cs
 │   │   │   ├── CatalogSearchOptions.cs
-│   │   │   ├── IDatabaseMaintenanceService.cs
-│   │   │   └── DatabaseMaintenanceService.cs
 │   │   ├── Configuration/
 │   │   │   ├── SyncConfiguration.cs
 │   │   │   ├── MirrorEndpoint.cs
@@ -458,19 +456,9 @@ public sealed record QualityMetrics
 
 #### 3.2.10 DatabaseMaintenanceService
 
-Performs database maintenance operations.
+**Status: Not Implemented**
 
-```csharp
-public interface IDatabaseMaintenanceService
-{
-    Task VacuumAsync();
-    Task OptimizeAsync();
-    Task BackupAsync(string backupPath);
-    Task RestoreAsync(string backupPath);
-    Task<DatabaseIntegrityResult> CheckIntegrityAsync();
-    Task<DatabaseStatistics> GetStatisticsAsync();
-}
-```
+Database maintenance operations are planned but not yet implemented. The catalog database can be maintained using standard SQLite tools.
 
 #### 3.2.11 ConfigurationValidator
 
@@ -874,99 +862,66 @@ gutenberg-sync [command] [options]
 
 Commands:
   sync        Synchronize archive from Project Gutenberg mirrors
-  catalog     Query and export the local catalog
+  catalog     Query the local catalog
   extract     Extract text content from downloaded files
-  config      View or modify configuration
+  config      Manage configuration
   health      Show system health and status
-  database    Database maintenance operations
-
-Global Options:
-  -c, --config <path>    Path to configuration file
-  -v, --verbose          Enable verbose output
-  --log-file <path>      Write logs to file
-  -h, --help             Show help
+  audit       Audit and verify file integrity
 
 sync [options]:
-  -t, --target <path>    Target directory for archive (required)
-  -p, --preset <name>    Content preset: text-only, text-epub, all-text, full
-  --include <pattern>    Include file pattern (can specify multiple)
-  --exclude <pattern>    Exclude file pattern (can specify multiple)
-  --mirror <url>         Specific mirror to use
-  --bandwidth <kbps>     Bandwidth limit in KB/s
-  --delete               Remove local files not on server
-  --dry-run              Show what would be transferred
-  -m, --metadata-only    Only sync metadata (RDF files) (Phase 1 of metadata-first strategy)
-  --verify               Verify downloaded files after sync (checksums, sizes)
-  --audit                Run audit scan to detect missing/corrupt files
+  -t, --target-dir <path>    Target directory for archive storage
+  -p, --preset <name>        Content preset: text-only, text-epub, all-text, full
+  --metadata-only            Only sync metadata (RDF files) (Phase 1 of metadata-first strategy)
+  --verify                   Verify file integrity after sync
+  --dry-run                  Preview sync without downloading files
+  --auto-retry               Automatically retry sync on failure (infinite retries)
+  --max-retries <n>          Maximum number of retry attempts (requires --auto-retry)
+  --retry-delay <seconds>    Seconds to wait before retry (default: 5)
+  --timeout <seconds>        Timeout in seconds (0 = no timeout, default: 0)
 
 catalog [subcommand] [options]:
-  search <query>         Search catalog by title/author
-    --language <code>    Filter by language
-    --subject <text>     Filter by subject
-    --author <name>      Filter by author
-    --format <json|csv|table>  Output format
-    --limit <n>          Maximum results
+  search                    Search catalog
+    --query <text>          Search query (searches title and author)
+    --author <name>         Filter by author
+    --subject <text>        Filter by subject
+    --language <code>       Filter by language
+    --limit <n>             Maximum number of results
   
-  stats                  Show catalog statistics
-  
-  export <path>          Export catalog to file
-    --format <json|csv>  Export format
-  
-  rebuild                Rebuild catalog from downloaded RDF files
+  stats                     Show catalog statistics
 
 extract [options]:
-  -s, --source <path>    Source archive directory
-  -o, --output <path>    Output directory for extracted text
-  --strip-headers        Remove Gutenberg headers/footers (default: true)
-  --chunk-size <words>   Split into chunks of N words (for RAG)
-  --chunk-overlap <words> Overlap between chunks
-  --language <code>      Only extract specific language
-  --format <txt|json|parquet|arrow>  Output format
-  --compress             Compress output (gzip for JSON, built-in for Parquet/Arrow)
-  --parallel <n>         Number of parallel extractions
-  --incremental          Only extract new/changed files (default: true)
-  --force                Force re-extraction of all files
-  --dry-run              Preview what would be extracted without processing
-  --book-ids <ids>       Extract specific book IDs (comma-separated)
-  --author <name>        Extract books by author (catalog query)
-  --subject <text>       Extract books by subject (catalog query)
-  --date-range <start:end>  Extract books by release date range (YYYY-MM-DD:YYYY-MM-DD)
-  --validate             Validate extracted chunks and report quality metrics
+  -i, --input <path>        Input file(s) or directory to extract from (required, can specify multiple)
+  -o, --output <path>       Output directory for extracted chunks (required)
+  --chunk-size <words>      Chunk size in words (default: 500)
+  --chunk-overlap <words>   Chunk overlap in words (default: 50)
+  --format <format>         Output format: json or txt (default: json)
+  --dry-run                 Preview extraction without processing files
 
 config [subcommand]:
-  show                   Display current configuration
-  init                   Create default configuration file
-  set <key> <value>      Set configuration value
-  validate               Validate configuration file
+  init [--path <file>]      Initialize a default configuration file
+  validate [--config <file>] Validate configuration file
 
-health [options]:
-  --format <json|table>  Output format (default: table)
-  --detailed             Show detailed information
+health                      Check system health and status
+  Shows:
+  - rsync availability and version
+  - Catalog database status (book count, author count)
 
-database [subcommand]:
-  vacuum                 Optimize database by reclaiming space
-  optimize               Analyze and optimize database indexes
-  backup <path>          Backup database to file
-  restore <path>         Restore database from backup
-  integrity              Check database integrity
-  stats                  Show database statistics
+audit [subcommand]:
+  scan --directory <path>   Scan directory for missing or corrupt files
+  verify                    Verify files against catalog
 ```
 
 **Health Command Output:**
 The health command provides a quick overview of system status:
-- Archive statistics (total size, file count, last sync time)
-- Catalog statistics (total books, languages, authors)
-- Extraction status (books extracted, last extraction time, output directories)
-- Issues and warnings (missing files, integrity problems)
-- Database status (size, last maintenance, integrity check)
+- rsync availability and version
+- Catalog database status (book count, author count)
 
 **Example Output:**
 ```
-Archive Status:
-  Location: /data/gutenberg
-  Total Size: 45.2 GB
-  Files: 1,234,567
-  Last Sync: 2025-12-08 04:00:00 UTC
+Checking system health...
+✓ rsync is available: /usr/bin/rsync (3.2.7)
+✓ Catalog database: 21181 books, 8794 authors
+Health check completed
 
 Catalog Status:
   Total Books: 76,234
@@ -1090,7 +1045,7 @@ foreach (var chunk in extracted.Chunks)
     "timeoutSeconds": 600
   },
   "catalog": {
-    "databasePath": null,
+    "DatabasePath": null,
     "autoRebuildOnSync": true,
     "verifyAfterSync": true,
     "auditScanIntervalDays": 7
@@ -1122,14 +1077,14 @@ foreach (var chunk in extracted.Chunks)
 
 The catalog database path is resolved as follows:
 
-1. **Explicit configuration**: If `catalog.databasePath` is set (absolute or relative), use it
+1. **Explicit configuration**: If `Catalog.DatabasePath` is set (absolute or relative), use it
 2. **Environment variable**: `GUTENBERG_CATALOG_DATABASE_PATH` overrides config
 3. **Default**: If null/empty, default to `{sync.targetDirectory}/gutenberg.db`
 
 **Examples:**
-- Config: `"databasePath": null` → Uses `{targetDirectory}/gutenberg.db`
-- Config: `"databasePath": "catalog.db"` → Relative to current working directory
-- Config: `"databasePath": "/var/lib/gutenberg/catalog.db"` → Absolute path
+- Config: `"DatabasePath": null` → Uses `{TargetDirectory}/gutenberg.db`
+- Config: `"DatabasePath": "catalog.db"` → Relative to current working directory
+- Config: `"DatabasePath": "/var/lib/gutenberg/catalog.db"` → Absolute path
 - Env: `GUTENBERG_CATALOG_DATABASE_PATH=/custom/path.db` → Overrides config
 
 ### 7.4 Configuration Validation
@@ -1263,7 +1218,7 @@ public sealed record RsyncDiscoveryResult
 | ExtractionStateTracker | State tracking, incremental detection, parameter hashing |
 | ChunkValidator | Quality metrics, validation rules, edge cases |
 | ConfigurationValidator | Path validation, required fields, value ranges |
-| DatabaseMaintenanceService | Vacuum, optimize, backup, restore, integrity checks |
+| (DatabaseMaintenanceService) | Not implemented - use standard SQLite tools |
 
 ### 9.2 Integration Tests
 

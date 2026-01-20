@@ -38,22 +38,17 @@ The application uses a **metadata-first synchronization strategy** that builds a
 - ✅ Normalize text encoding to UTF-8
 - ✅ Chunk text into configurable segments
 - ✅ **Full metadata embedded in each chunk** (book ID, title, authors, language, subjects, chunk index)
-- ✅ **Incremental extraction** (only processes new/changed files)
-- ✅ **Selective extraction** (by author, subject, date range, book IDs)
-- ✅ **Multiple export formats** (JSON, Parquet, Arrow, compressed JSON)
-- ✅ **Quality validation** and metrics reporting
 - ✅ **Dry-run mode** to preview extractions
-- ✅ Batch extraction with parallelization
+- ✅ Multiple output formats (JSON, TXT)
 
 ### Additional Features
 - ✅ Real-time progress tracking
-- ✅ Concurrent sync and extract operations (with verification)
 - ✅ **Health/status monitoring** command
 - ✅ **Configuration validation** on startup
-- ✅ **Database maintenance** (vacuum, optimize, backup, restore)
+- ✅ **File integrity auditing** (scan and verify)
 - ✅ Comprehensive error handling and retry logic
 - ✅ Structured logging
-- ✅ Configuration via JSON/YAML with environment variable overrides
+- ✅ Configuration via JSON with environment variable overrides
 
 ## Requirements
 
@@ -161,11 +156,11 @@ This creates a default `config.json` file. Edit it to set your target directory:
 
 ```json
 {
-  "sync": {
-    "targetDirectory": "/data/gutenberg"
+  "Sync": {
+    "TargetDirectory": "/mnt/workspace/gutenberg"
   },
-  "catalog": {
-    "databasePath": null
+  "Catalog": {
+    "DatabasePath": null
   }
 }
 ```
@@ -176,13 +171,13 @@ Download the Project Gutenberg archive:
 
 ```bash
 # Text-only (smallest, ~15GB)
-gutenberg-sync sync -t /data/gutenberg -p text-only
+gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-only
 
 # Text + EPUB (recommended for RAG, ~50GB)
-gutenberg-sync sync -t /data/gutenberg -p text-epub
+gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub
 
 # Full archive (~1TB)
-gutenberg-sync sync -t /data/gutenberg -p full
+gutenberg-sync sync -t /mnt/workspace/gutenberg -p full
 ```
 
 The sync process uses a **metadata-first strategy**:
@@ -193,18 +188,18 @@ The sync process uses a **metadata-first strategy**:
 
 ```bash
 # Auto-retry with infinite retries (recommended for long downloads)
-gutenberg-sync sync -t /data/gutenberg -p text-epub --auto-retry
+gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry
 
 # Auto-retry with maximum retry limit
-gutenberg-sync sync -t /data/gutenberg -p text-epub --auto-retry --max-retries 10 --retry-delay 30
+gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry --max-retries 10 --retry-delay 30
 
 # Or use the wrapper script
-./sync-with-retry.sh -t /data/gutenberg -p text-epub
+./sync-with-retry.sh -t /mnt/workspace/gutenberg -p text-epub
 ```
 
 The sync automatically resumes from where it stopped - rsync's built-in resume handles partial files efficiently. Auto-retry ensures the process restarts automatically if interrupted.
 
-**Running in Background**: For long syncs that need to survive screen locks or terminal disconnections, see [RUN_IN_BACKGROUND.md](RUN_IN_BACKGROUND.md) for options using `screen`, `tmux`, `nohup`, or systemd services.
+**Running in Background**: For long syncs that need to survive screen locks or terminal disconnections, see the [Running in Background](#running-in-background) section below.
 
 **Important**: Content sync now has **no timeout by default** (runs indefinitely). Use `--timeout <seconds>` if you need to set a timeout.
 
@@ -215,22 +210,19 @@ Process the downloaded files into RAG-ready chunks:
 ```bash
 # Basic extraction
 gutenberg-sync extract \
-  -s /data/gutenberg \
-  -o /data/gutenberg-rag \
+  -i /mnt/workspace/gutenberg \
+  -o /mnt/workspace/gutenberg-rag \
   --chunk-size 500 \
   --chunk-overlap 50 \
-  --format json \
-  --strip-headers
+  --format json
 ```
-
-**Incremental Extraction**: By default, only new/changed files are extracted. Re-run with different parameters to experiment without re-processing everything.
 
 **Preview Before Extracting**: Use `--dry-run` to see what would be extracted:
 
 ```bash
 gutenberg-sync extract \
-  -s /data/gutenberg \
-  -o /data/gutenberg-rag \
+  -i /mnt/workspace/gutenberg \
+  -o /mnt/workspace/gutenberg-rag \
   --dry-run
 ```
 
@@ -267,8 +259,8 @@ gutenberg-sync catalog search --language "English"
 # Filter by author
 gutenberg-sync catalog search --author "Shakespeare"
 
-# Export catalog
-gutenberg-sync catalog export catalog.json --format json
+# Filter by subject
+gutenberg-sync catalog search --subject "Fiction"
 ```
 
 ### 5. Web Application
@@ -279,7 +271,7 @@ GutenbergSync includes a web UI for browsing the catalog, monitoring sync progre
 
 ```bash
 # From the project root directory
-cd "/home/jfinlon/Documents/Projects/Gutenberg Archive"
+cd /home/jfinlon/Documents/Projects/GutenbergSync
 dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
 ```
 
@@ -297,14 +289,14 @@ pkill -9 -f "dotnet.*GutenbergSync"
 sleep 2
 
 # Then start the server
-cd "/home/jfinlon/Documents/Projects/Gutenberg Archive"
+cd /home/jfinlon/Documents/Projects/GutenbergSync
 dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
 ```
 
 **One-liner to kill and restart:**
 
 ```bash
-pkill -9 -f "dotnet.*GutenbergSync" 2>/dev/null; pkill -9 -f "GutenbergSync.Web" 2>/dev/null; pkill -9 -f "Gutenberg" 2>/dev/null; sleep 3; cd "/home/jfinlon/Documents/Projects/Gutenberg Archive" && dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
+pkill -9 -f "dotnet.*GutenbergSync" 2>/dev/null; pkill -9 -f "GutenbergSync.Web" 2>/dev/null; pkill -9 -f "Gutenberg" 2>/dev/null; sleep 3; cd /home/jfinlon/Documents/Projects/GutenbergSync && dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
 ```
 
 **Troubleshooting "address already in use" errors:**
@@ -336,7 +328,7 @@ sleep 2
 
 4. **Then start the server:**
 ```bash
-cd "/home/jfinlon/Documents/Projects/Gutenberg Archive"
+cd /home/jfinlon/Documents/Projects/GutenbergSync
 dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
 ```
 
@@ -367,49 +359,51 @@ Create a `config.json` file:
 
 ```json
 {
-  "sync": {
-    "targetDirectory": "/data/gutenberg",
-    "preset": "text-epub",
-    "mirrors": [
+  "Sync": {
+    "TargetDirectory": "/mnt/workspace/gutenberg",
+    "Preset": "text-epub",
+    "Mirrors": [
       {
-        "host": "aleph.gutenberg.org",
-        "module": "gutenberg",
-        "priority": 1
+        "Host": "aleph.gutenberg.org",
+        "Module": "gutenberg",
+        "Priority": 1,
+        "Region": "US"
       },
       {
-        "host": "aleph.gutenberg.org",
-        "module": "gutenberg-epub",
-        "priority": 1
+        "Host": "aleph.gutenberg.org",
+        "Module": "gutenberg-epub",
+        "Priority": 1,
+        "Region": "US"
       }
     ],
-    "include": ["*/", "*.txt", "*.epub", "*.zip"],
-    "exclude": ["*/old/*", "*.mp3", "*.ogg"],
-    "maxFileSizeMb": 50,
-    "bandwidthLimitKbps": null,
-    "deleteRemoved": false,
-    "timeoutSeconds": 600
+    "Include": ["*/", "*.txt", "*.epub", "*.zip"],
+    "Exclude": ["*/old/*", "*.mp3", "*.ogg"],
+    "MaxFileSizeMb": 50,
+    "BandwidthLimitKbps": null,
+    "DeleteRemoved": false,
+    "TimeoutSeconds": 600
   },
-  "catalog": {
-    "databasePath": null,
-    "autoRebuildOnSync": true,
-    "verifyAfterSync": true,
-    "auditScanIntervalDays": 7
+  "Catalog": {
+    "DatabasePath": null,
+    "AutoRebuildOnSync": true,
+    "VerifyAfterSync": true,
+    "AuditScanIntervalDays": 7
   },
-  "extraction": {
-    "outputDirectory": "/data/gutenberg-text",
-    "stripHeaders": true,
-    "normalizeEncoding": true,
-    "defaultChunkSizeWords": 500,
-    "defaultChunkOverlapWords": 50,
-    "incremental": true,
-    "validateChunks": true,
-    "defaultFormat": "json",
-    "compressOutput": false
+  "Extraction": {
+    "OutputDirectory": null,
+    "StripHeaders": true,
+    "NormalizeEncoding": true,
+    "DefaultChunkSizeWords": 500,
+    "DefaultChunkOverlapWords": 50,
+    "Incremental": true,
+    "ValidateChunks": true,
+    "DefaultFormat": "json",
+    "CompressOutput": false
   },
-  "logging": {
-    "level": "Information",
-    "filePath": "logs/gutenberg-sync.log",
-    "retainDays": 30
+  "Logging": {
+    "Level": "Information",
+    "FilePath": null,
+    "RetainDays": 30
   }
 }
 ```
@@ -417,16 +411,16 @@ Create a `config.json` file:
 ### Database Path
 
 The catalog database path is resolved as:
-1. Explicit config: `catalog.databasePath` (absolute or relative)
+1. Explicit config: `Catalog.DatabasePath` (absolute or relative)
 2. Environment variable: `GUTENBERG_CATALOG_DATABASE_PATH`
-3. Default: `{sync.targetDirectory}/gutenberg.db`
+3. Default: `{Sync.TargetDirectory}/gutenberg.db`
 
 ### Environment Variables
 
 All configuration values can be overridden:
 
 ```bash
-export GUTENBERG_SYNC_TARGET_DIRECTORY=/data/gutenberg
+export GUTENBERG_SYNC_TARGET_DIRECTORY=/mnt/workspace/gutenberg
 export GUTENBERG_SYNC_BANDWIDTH_LIMIT_KBPS=5000
 export GUTENBERG_CATALOG_DATABASE_PATH=/var/lib/gutenberg/catalog.db
 ```
@@ -437,161 +431,96 @@ export GUTENBERG_CATALOG_DATABASE_PATH=/var/lib/gutenberg/catalog.db
 
 ```bash
 # Initial sync with text-only preset
-gutenberg-sync sync -t /data/gutenberg -p text-only
+gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-only
+# Initial sync with text-epub preset
+gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub
+
+dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry
 
 # Incremental update
-gutenberg-sync sync -t /data/gutenberg
-
-# Sync with bandwidth limit
-gutenberg-sync sync -t /data/gutenberg --bandwidth 5000
+gutenberg-sync sync -t /mnt/workspace/gutenberg
 
 # Metadata-only sync (Phase 1 only)
-gutenberg-sync sync -t /data/gutenberg --metadata-only
+gutenberg-sync sync -t /mnt/workspace/gutenberg --metadata-only
 
 # Dry run (see what would be transferred)
-gutenberg-sync sync -t /data/gutenberg --dry-run
+gutenberg-sync sync -t /mnt/workspace/gutenberg --dry-run
 
 # Verify files after sync
-gutenberg-sync sync -t /data/gutenberg --verify
+gutenberg-sync sync -t /mnt/workspace/gutenberg --verify
 ```
 
 ### Extraction Operations
 
 ```bash
-# Extract with default settings (incremental by default)
-gutenberg-sync extract -s /data/gutenberg -o /data/rag-output
+# Extract with default settings
+gutenberg-sync extract -i /mnt/workspace/gutenberg -o /data/rag-output
 
 # Extract with custom chunking
 gutenberg-sync extract \
-  -s /data/gutenberg \
+  -i /mnt/workspace/gutenberg \
   -o /data/rag-output \
   --chunk-size 1000 \
   --chunk-overlap 100
 
-# Extract only English books
+# Extract to TXT format
 gutenberg-sync extract \
-  -s /data/gutenberg \
+  -i /mnt/workspace/gutenberg \
   -o /data/rag-output \
-  --language en
-
-# Selective extraction by author
-gutenberg-sync extract \
-  -s /data/gutenberg \
-  -o /data/rag-output \
-  --author "Shakespeare"
-
-# Extract specific book IDs
-gutenberg-sync extract \
-  -s /data/gutenberg \
-  -o /data/rag-output \
-  --book-ids 100,1342,84
-
-# Extract by date range
-gutenberg-sync extract \
-  -s /data/gutenberg \
-  -o /data/rag-output \
-  --date-range 2000-01-01:2020-12-31
-
-# Extract to Parquet format (for analytics/ML)
-gutenberg-sync extract \
-  -s /data/gutenberg \
-  -o /data/rag-output \
-  --format parquet \
-  --compress
+  --format txt
 
 # Dry-run to preview what would be extracted
 gutenberg-sync extract \
-  -s /data/gutenberg \
+  -i /mnt/workspace/gutenberg \
   -o /data/rag-output \
   --dry-run
-
-# Force re-extraction of all files
-gutenberg-sync extract \
-  -s /data/gutenberg \
-  -o /data/rag-output \
-  --force
-
-# Extract with quality validation
-gutenberg-sync extract \
-  -s /data/gutenberg \
-  -o /data/rag-output \
-  --validate
-
-# Parallel extraction (faster)
-gutenberg-sync extract \
-  -s /data/gutenberg \
-  -o /data/rag-output \
-  --parallel 8
 ```
 
 ### Catalog Operations
 
 ```bash
 # Search catalog
-gutenberg-sync catalog search "pride and prejudice"
+gutenberg-sync catalog search --query "pride and prejudice"
+
+# Search with filters
+gutenberg-sync catalog search --query "sherlock" --author "Doyle" --language en --limit 10
 
 # Show statistics
 gutenberg-sync catalog stats
-
-# Export to CSV
-gutenberg-sync catalog export catalog.csv --format csv
-
-# Rebuild catalog from RDF files
-gutenberg-sync catalog rebuild
 ```
 
 ### Health and Status
 
 ```bash
-# Quick system status overview
+# Check system health
 gutenberg-sync health
-
-# Detailed status with JSON output
-gutenberg-sync health --detailed --format json
 ```
 
 Shows:
-- Archive statistics (size, file count, last sync)
-- Catalog statistics (books, languages, authors)
-- Extraction status (books extracted, output directories)
-- Issues and warnings
+- rsync availability and version
+- Catalog database status (book count, author count)
 
-### Configuration Validation
+### Configuration Management
 
 ```bash
+# Initialize default configuration file
+gutenberg-sync config init
+
+# Initialize with custom path
+gutenberg-sync config init --path ./my-config.json
+
 # Validate configuration file
-gutenberg-sync config validate
-
-# Configuration is automatically validated on startup
-gutenberg-sync sync -c config.json  # Will fail fast if config is invalid
-```
-
-### Database Maintenance
-
-```bash
-# Optimize database (vacuum and optimize indexes)
-gutenberg-sync database vacuum
-gutenberg-sync database optimize
-
-# Backup and restore
-gutenberg-sync database backup /backup/gutenberg.db
-gutenberg-sync database restore /backup/gutenberg.db
-
-# Check database integrity
-gutenberg-sync database integrity
-
-# Show database statistics
-gutenberg-sync database stats
+gutenberg-sync config validate --config ./config.json
 ```
 
 ### Audit Operations
 
 ```bash
-# Run audit scan
-gutenberg-sync sync --audit
+# Scan directory for missing or corrupt files
+gutenberg-sync audit scan --directory /mnt/workspace/gutenberg
 
-# Verify specific files
-gutenberg-sync sync -t /data/gutenberg --verify
+# Verify files against catalog
+gutenberg-sync audit verify
 ```
 
 ## Architecture
@@ -621,10 +550,7 @@ gutenberg-sync sync -t /data/gutenberg --verify
 - **RdfParser**: Parses Project Gutenberg RDF/XML metadata
 - **LanguageMapper**: Maps language names to ISO 639-1 codes
 - **TextExtractor**: Extracts and chunks text with metadata
-- **ExtractionStateTracker**: Tracks extraction history for incremental extraction
-- **ChunkValidator**: Validates chunks and calculates quality metrics
 - **CatalogRepository**: SQLite-based catalog with full-text search
-- **DatabaseMaintenanceService**: Database optimization and maintenance operations
 - **ConfigurationValidator**: Validates configuration on startup
 - **AuditService**: Verifies file integrity and detects issues
 
@@ -675,91 +601,223 @@ The `extract` command processes the raw files into RAG-ready format:
 
 **Output Formats:**
 - **JSON** (default): Standard JSON with embedded metadata, ready for vector databases
-- **Parquet**: Columnar format optimized for analytics and ML pipelines
-- **Arrow**: In-memory columnar format for high-performance processing
-- **Compressed JSON**: Gzip/brotli compressed JSON for storage optimization
-
-**Incremental Extraction:**
-- Tracks which files have been extracted and with what parameters
-- Only re-extracts if source file changed or parameters changed
-- Significantly faster than full extraction (typically <10% of full time)
-- Enables experimentation with different chunk sizes without full re-processing
-
-**Selective Extraction:**
-- Extract based on catalog queries (author, subject, date range)
-- Extract specific book IDs
-- Combine filters for targeted datasets
-- Perfect for creating focused RAG datasets
-
-**Quality Validation:**
-- Validates extracted chunks (non-empty, reasonable length, encoding)
-- Calculates quality scores per book
-- Reports aggregate statistics and common issues
-- Helps ensure high-quality RAG datasets
+- **TXT**: Plain text format
 
 **Benefits:**
 - Clean text without headers/footers
 - Configurable chunk sizes for optimal embedding
 - Full metadata for attribution and filtering
-- Incremental extraction saves time on large archives
-- Multiple formats for different use cases
-- Quality metrics ensure data integrity
 
-## Advanced Features
+## Running in Background
 
-### Incremental Extraction
+When running long sync operations, you want the process to continue even if:
+- Your screen locks
+- Your terminal disconnects
+- Your SSH session ends
+- Your laptop goes to sleep (if on a server)
 
-GutenbergSync tracks extraction history in the database, enabling efficient incremental extraction:
+### Solution 1: screen (Recommended)
 
-- **Automatic Detection**: Only extracts files that haven't been extracted or have changed
-- **Parameter Tracking**: Re-extracts if chunk size, format, or other parameters changed
-- **Fast Updates**: Typically completes in <10% of full extraction time
-- **Experiment Freely**: Try different chunk sizes without full re-processing
-
-### Selective Extraction
-
-Extract specific subsets of books using catalog queries:
+Use `screen` to create a detachable session:
 
 ```bash
-# Extract all books by a specific author
-gutenberg-sync extract --author "Austen, Jane" -s /data/gutenberg -o /output
+# Start a new screen session
+screen -S gutenberg-sync
 
-# Extract books from a specific time period
-gutenberg-sync extract --date-range 1800-01-01:1900-12-31 -s /data/gutenberg -o /output
+# Run your sync command
+cd /home/jfinlon/Documents/Projects/GutenbergSync
+dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry
 
-# Extract books with specific subjects
-gutenberg-sync extract --subject "Fiction" --language en -s /data/gutenberg -o /output
-
-# Extract specific book IDs
-gutenberg-sync extract --book-ids 100,1342,84 -s /data/gutenberg -o /output
+# Detach: Press Ctrl+A, then D
+# Reattach: screen -r gutenberg-sync
 ```
 
-### Export Formats
+**Useful screen commands:**
+```bash
+# List sessions
+screen -ls
 
-Choose the best format for your use case:
+# Attach to session
+screen -r gutenberg-sync
 
-- **JSON**: Direct ingestion into vector databases (Pinecone, Weaviate, etc.)
-- **Parquet**: Analytics, ML pipelines, Spark processing
-- **Arrow**: High-performance in-memory processing
-- **Compressed JSON**: Storage optimization while maintaining JSON structure
+# Create new session with name
+screen -S my-sync
 
-### Quality Metrics
+# Detach: Ctrl+A then D
+# Kill session: Ctrl+A then K (or exit normally)
+```
 
-Extraction includes quality validation:
+**Or start detached:**
+```bash
+cd /home/jfinlon/Documents/Projects/GutenbergSync && screen -dmS gutenberg-sync bash -c "dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry; exec bash"
+```
 
-- Chunk validation (non-empty, reasonable length, valid encoding)
-- Quality scores per book (0.0 to 1.0)
-- Aggregate statistics and common issues
-- Recommendations for improvement
+### Solution 2: nohup (Simplest)
 
-### Concurrent Operations
+Run the command with `nohup` to ignore hangup signals:
 
-GutenbergSync supports running sync and extract operations concurrently:
+```bash
+# Run with nohup and redirect output
+nohup dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry > sync.log 2>&1 &
 
-- **File-level locking** prevents write conflicts
-- **Verification system** ensures data integrity
-- **Audit logging** tracks all operations
-- **Automatic retry** for failed verifications
+# Check progress
+tail -f sync.log
+
+# Check if still running
+ps aux | grep GutenbergSync
+```
+
+### Solution 3: tmux (Advanced)
+
+Similar to screen but more powerful:
+
+```bash
+# Start tmux session
+tmux new -s gutenberg-sync
+
+# Run your command
+dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry
+
+# Detach: Ctrl+B then D
+# Reattach: tmux attach -t gutenberg-sync
+```
+
+### Important Notes
+
+1. **Use `--auto-retry`**: This ensures the sync restarts if interrupted
+2. **No timeout by default**: Content sync has no timeout (runs indefinitely)
+3. **Resume is automatic**: rsync automatically resumes from where it stopped
+
+## Resume Behavior
+
+GutenbergSync supports smart resume! When you restart a sync after a failure, rsync automatically:
+
+### Incremental Sync (Built-in)
+- **Skips files that already exist** and are up-to-date (same size and modification time)
+- Only transfers **new files** or **changed files**
+- This is rsync's default behavior - no re-downloading of completed files
+
+### Partial File Resume
+- **Resumes interrupted file transfers** using `--partial` flag
+- rsync's **delta-transfer algorithm** automatically handles resume:
+  - Compares checksums of partial file with source
+  - Only transfers the missing portions
+  - More efficient than re-transferring entire files
+- Partial files are stored in `.rsync-partial/` directory
+- On resume, rsync **continues from where it left off** for partially downloaded files
+
+### How It Works
+
+**First sync:**
+```bash
+dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg
+# Downloads all files
+```
+
+**If interrupted (Ctrl+C, network error, etc.):**
+- Files already downloaded are **kept**
+- Partially downloaded files are saved in `.rsync-partial/`
+
+**Resume (run the same command again):**
+```bash
+dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg
+# Only downloads:
+#   - Files that weren't downloaded yet
+#   - Files that were partially downloaded (resumes from where it stopped)
+#   - Files that changed on the server
+# Skips files that are already complete and up-to-date
+```
+
+### Best Practices
+
+- **Safe to interrupt**: You can stop a sync at any time (Ctrl+C) and resume later
+- **Safe to restart**: Running the same sync command multiple times is safe and efficient
+- **No manual cleanup needed**: Partial files are automatically handled
+- **Network interruptions**: Automatically handled - just restart the sync
+
+## Troubleshooting
+
+### Permission Issues
+
+The application needs write access to the target directory to create the database file (`gutenberg.db`).
+
+**Quick Fix:**
+```bash
+# Create the directory with proper permissions
+sudo mkdir -p /mnt/workspace/gutenberg && \
+sudo chown -R $USER:$USER /mnt/workspace/gutenberg && \
+sudo chmod -R 755 /mnt/workspace/gutenberg
+```
+
+**Verify Permissions:**
+```bash
+# Test write access
+touch /mnt/workspace/gutenberg/test.txt && rm /mnt/workspace/gutenberg/test.txt && echo "✓ Write access OK"
+```
+
+**Alternative: Use a Different Database Location**
+
+If you want to keep the sync directory at `/mnt/workspace/gutenberg` but put the database elsewhere:
+
+```bash
+# Create config
+dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- config init
+
+# Edit config.json to add:
+{
+  "Sync": {
+    "TargetDirectory": "/mnt/workspace/gutenberg"
+  },
+  "Catalog": {
+    "DatabasePath": "/home/$USER/.gutenberg-sync/gutenberg.db"
+  }
+}
+
+# Create the database directory
+mkdir -p ~/.gutenberg-sync
+```
+
+### Web Server Issues
+
+**"Address already in use" errors:**
+
+1. Kill all related processes:
+```bash
+pkill -9 -f "dotnet.*GutenbergSync" 2>/dev/null
+pkill -9 -f "GutenbergSync.Web" 2>/dev/null
+sleep 3
+```
+
+2. Check what's using the port:
+```bash
+lsof -i :5001 || netstat -tulpn | grep :5001 || ss -tulpn | grep :5001
+```
+
+3. Kill the specific process or use a different port:
+```bash
+# Use different port
+dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5002"
+```
+
+### Sync Issues
+
+**Process keeps stopping:**
+- Check system limits: `ulimit -a`
+- Check disk space: `df -h`
+- Check network connection
+- Use `--auto-retry` to automatically restart on failure
+
+**Can't reattach to screen:**
+```bash
+# List all screen sessions
+screen -ls
+
+# Force attach (if session is attached elsewhere)
+screen -r -d gutenberg-sync
+
+# Kill stuck session
+screen -X -S gutenberg-sync quit
+```
 
 ## Compliance
 
@@ -767,6 +825,22 @@ GutenbergSync supports running sync and extract operations concurrently:
 - ✅ Uses official mirror infrastructure only (no website scraping)
 - ✅ Implements respectful request patterns (rate limiting, backoff)
 - ✅ Includes appropriate attribution in outputs
+
+## Web API Reference
+
+The web application provides the following API endpoints:
+
+- `GET /api/Api/statistics` - Get catalog statistics (total books, authors, languages, subjects)
+- `POST /api/Api/search` - Search the catalog (request body: `{ query, author, language, limit, offset }`)
+- `POST /api/Api/sync/start` - Start a sync operation
+- `POST /api/Api/epub/copy` - Copy an EPUB file (request body: `{ bookId, destinationPath }`)
+- `GET /api/Api/browse?path=<directory>` - Browse directories (limited to `/home/jfinlon`)
+
+**SignalR Hub:**
+- `/hubs/sync` - Real-time sync progress updates
+  - `ProgressUpdate` - Progress information
+  - `SyncComplete` - Sync completion notification
+  - `SyncError` - Error notifications
 
 ## Documentation
 
