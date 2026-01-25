@@ -1,0 +1,5 @@
+screen -S gutenberg-sync --to create screen
+dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry
+
+cntrl-ad to detach
+screen -R to resume screen
