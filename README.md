@@ -104,7 +104,7 @@ If rsync is not found, the application will provide platform-specific installati
 **Option 1: Using the publish script (recommended)**
 ```bash
 git clone <repository-url>
-cd GutenbergSync
+cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
 ./publish.sh
 ```
 
@@ -146,10 +146,10 @@ dotnet publish src/GutenbergSync.Cli/GutenbergSync.Cli.csproj \
 
 ### 1. Initial Setup
 
-Create a configuration file:
+From the project root (`/mnt/workspace/repos/Projects/Tools/GutenbergSync`), create a configuration file:
 
 ```bash
-gutenberg-sync config init
+./publish/gutenberg-sync config init
 ```
 
 This creates a default `config.json` file. Edit it to set your target directory:
@@ -167,17 +167,17 @@ This creates a default `config.json` file. Edit it to set your target directory:
 
 ### 2. Sync Raw Content
 
-Download the Project Gutenberg archive:
+Download the Project Gutenberg archive (from project root):
 
 ```bash
 # Text-only (smallest, ~15GB)
-gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-only
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-only
 
 # Text + EPUB (recommended for RAG, ~50GB)
-gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub
 
 # Full archive (~1TB)
-gutenberg-sync sync -t /mnt/workspace/gutenberg -p full
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p full
 ```
 
 The sync process uses a **metadata-first strategy**:
@@ -188,10 +188,10 @@ The sync process uses a **metadata-first strategy**:
 
 ```bash
 # Auto-retry with infinite retries (recommended for long downloads)
-gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry
 
 # Auto-retry with maximum retry limit
-gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry --max-retries 10 --retry-delay 30
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry --max-retries 10 --retry-delay 30
 
 # Or use the wrapper script
 ./sync-with-retry.sh -t /mnt/workspace/gutenberg -p text-epub
@@ -209,7 +209,7 @@ Process the downloaded files into RAG-ready chunks:
 
 ```bash
 # Basic extraction
-gutenberg-sync extract \
+./publish/gutenberg-sync extract \
   -i /mnt/workspace/gutenberg \
   -o /mnt/workspace/gutenberg-rag \
   --chunk-size 500 \
@@ -220,7 +220,7 @@ gutenberg-sync extract \
 **Preview Before Extracting**: Use `--dry-run` to see what would be extracted:
 
 ```bash
-gutenberg-sync extract \
+./publish/gutenberg-sync extract \
   -i /mnt/workspace/gutenberg \
   -o /mnt/workspace/gutenberg-rag \
   --dry-run
@@ -250,17 +250,17 @@ Query your local catalog:
 
 ```bash
 # Search by title
-gutenberg-sync catalog search "sherlock" --limit 10
+./publish/gutenberg-sync catalog search "sherlock" --limit 10
 
 # Filter by language (accepts both names and ISO codes)
-gutenberg-sync catalog search --language en
-gutenberg-sync catalog search --language "English"
+./publish/gutenberg-sync catalog search --language en
+./publish/gutenberg-sync catalog search --language "English"
 
 # Filter by author
-gutenberg-sync catalog search --author "Shakespeare"
+./publish/gutenberg-sync catalog search --author "Shakespeare"
 
 # Filter by subject
-gutenberg-sync catalog search --subject "Fiction"
+./publish/gutenberg-sync catalog search --subject "Fiction"
 ```
 
 ### 5. Web Application
@@ -271,8 +271,18 @@ GutenbergSync includes a web UI for browsing the catalog, monitoring sync progre
 
 ```bash
 # From the project root directory
-cd /home/jfinlon/Documents/Projects/GutenbergSync
+cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
 dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
+```
+
+Or run in a screen session to keep it running in the background:
+
+```bash
+screen -S gutenberg-web
+cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
+dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
+# Detach: Ctrl+A, then D
+# Reattach: screen -r gutenberg-web
 ```
 
 The web application will be available at `http://localhost:5001`.
@@ -289,14 +299,14 @@ pkill -9 -f "dotnet.*GutenbergSync"
 sleep 2
 
 # Then start the server
-cd /home/jfinlon/Documents/Projects/GutenbergSync
+cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
 dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
 ```
 
 **One-liner to kill and restart:**
 
 ```bash
-pkill -9 -f "dotnet.*GutenbergSync" 2>/dev/null; pkill -9 -f "GutenbergSync.Web" 2>/dev/null; pkill -9 -f "Gutenberg" 2>/dev/null; sleep 3; cd /home/jfinlon/Documents/Projects/GutenbergSync && dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
+pkill -9 -f "dotnet.*GutenbergSync" 2>/dev/null; pkill -9 -f "GutenbergSync.Web" 2>/dev/null; pkill -9 -f "Gutenberg" 2>/dev/null; sleep 3; cd /mnt/workspace/repos/Projects/Tools/GutenbergSync && dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
 ```
 
 **Troubleshooting "address already in use" errors:**
@@ -328,7 +338,7 @@ sleep 2
 
 4. **Then start the server:**
 ```bash
-cd /home/jfinlon/Documents/Projects/GutenbergSync
+cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
 dotnet run --project src/GutenbergSync.Web/GutenbergSync.Web.csproj --urls "http://localhost:5001"
 ```
 
@@ -430,47 +440,48 @@ export GUTENBERG_CATALOG_DATABASE_PATH=/var/lib/gutenberg/catalog.db
 ### Sync Operations
 
 ```bash
-# Initial sync with text-only preset
-gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-only
-# Initial sync with text-epub preset
-gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub
+# All commands run from project root: cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
 
-dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry
+# Initial sync with text-only preset
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-only
+
+# Initial sync with text-epub preset (use screen for long syncs)
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry
 
 # Incremental update
-gutenberg-sync sync -t /mnt/workspace/gutenberg
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg
 
 # Metadata-only sync (Phase 1 only)
-gutenberg-sync sync -t /mnt/workspace/gutenberg --metadata-only
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg --metadata-only
 
 # Dry run (see what would be transferred)
-gutenberg-sync sync -t /mnt/workspace/gutenberg --dry-run
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg --dry-run
 
 # Verify files after sync
-gutenberg-sync sync -t /mnt/workspace/gutenberg --verify
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg --verify
 ```
 
 ### Extraction Operations
 
 ```bash
 # Extract with default settings
-gutenberg-sync extract -i /mnt/workspace/gutenberg -o /data/rag-output
+./publish/gutenberg-sync extract -i /mnt/workspace/gutenberg -o /data/rag-output
 
 # Extract with custom chunking
-gutenberg-sync extract \
+./publish/gutenberg-sync extract \
   -i /mnt/workspace/gutenberg \
   -o /data/rag-output \
   --chunk-size 1000 \
   --chunk-overlap 100
 
 # Extract to TXT format
-gutenberg-sync extract \
+./publish/gutenberg-sync extract \
   -i /mnt/workspace/gutenberg \
   -o /data/rag-output \
   --format txt
 
 # Dry-run to preview what would be extracted
-gutenberg-sync extract \
+./publish/gutenberg-sync extract \
   -i /mnt/workspace/gutenberg \
   -o /data/rag-output \
   --dry-run
@@ -480,20 +491,20 @@ gutenberg-sync extract \
 
 ```bash
 # Search catalog
-gutenberg-sync catalog search --query "pride and prejudice"
+./publish/gutenberg-sync catalog search --query "pride and prejudice"
 
 # Search with filters
-gutenberg-sync catalog search --query "sherlock" --author "Doyle" --language en --limit 10
+./publish/gutenberg-sync catalog search --query "sherlock" --author "Doyle" --language en --limit 10
 
 # Show statistics
-gutenberg-sync catalog stats
+./publish/gutenberg-sync catalog stats
 ```
 
 ### Health and Status
 
 ```bash
 # Check system health
-gutenberg-sync health
+./publish/gutenberg-sync health
 ```
 
 Shows:
@@ -504,23 +515,23 @@ Shows:
 
 ```bash
 # Initialize default configuration file
-gutenberg-sync config init
+./publish/gutenberg-sync config init
 
 # Initialize with custom path
-gutenberg-sync config init --path ./my-config.json
+./publish/gutenberg-sync config init --path ./my-config.json
 
 # Validate configuration file
-gutenberg-sync config validate --config ./config.json
+./publish/gutenberg-sync config validate --config ./config.json
 ```
 
 ### Audit Operations
 
 ```bash
 # Scan directory for missing or corrupt files
-gutenberg-sync audit scan --directory /mnt/workspace/gutenberg
+./publish/gutenberg-sync audit scan --directory /mnt/workspace/gutenberg
 
 # Verify files against catalog
-gutenberg-sync audit verify
+./publish/gutenberg-sync audit verify
 ```
 
 ## Architecture
@@ -618,15 +629,15 @@ When running long sync operations, you want the process to continue even if:
 
 ### Solution 1: screen (Recommended)
 
-Use `screen` to create a detachable session:
+Use `screen` to create a detachable session. All commands run from the project root:
 
 ```bash
 # Start a new screen session
 screen -S gutenberg-sync
 
-# Run your sync command
-cd /home/jfinlon/Documents/Projects/GutenbergSync
-dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry
+# From project root, run your sync command
+cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry
 
 # Detach: Press Ctrl+A, then D
 # Reattach: screen -r gutenberg-sync
@@ -649,7 +660,7 @@ screen -S my-sync
 
 **Or start detached:**
 ```bash
-cd /home/jfinlon/Documents/Projects/GutenbergSync && screen -dmS gutenberg-sync bash -c "dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry; exec bash"
+cd /mnt/workspace/repos/Projects/Tools/GutenbergSync && screen -dmS gutenberg-sync bash -c "./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry; exec bash"
 ```
 
 ### Solution 2: nohup (Simplest)
@@ -657,14 +668,15 @@ cd /home/jfinlon/Documents/Projects/GutenbergSync && screen -dmS gutenberg-sync 
 Run the command with `nohup` to ignore hangup signals:
 
 ```bash
-# Run with nohup and redirect output
-nohup dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry > sync.log 2>&1 &
+# Run with nohup and redirect output (from project root)
+cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
+nohup ./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry > sync.log 2>&1 &
 
 # Check progress
 tail -f sync.log
 
 # Check if still running
-ps aux | grep GutenbergSync
+ps aux | grep gutenberg-sync
 ```
 
 ### Solution 3: tmux (Advanced)
@@ -675,8 +687,9 @@ Similar to screen but more powerful:
 # Start tmux session
 tmux new -s gutenberg-sync
 
-# Run your command
-dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry
+# Run your command (from project root)
+cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry
 
 # Detach: Ctrl+B then D
 # Reattach: tmux attach -t gutenberg-sync
@@ -710,7 +723,8 @@ GutenbergSync supports smart resume! When you restart a sync after a failure, rs
 
 **First sync:**
 ```bash
-dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg
+cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub
 # Downloads all files
 ```
 
@@ -720,7 +734,8 @@ dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --pr
 
 **Resume (run the same command again):**
 ```bash
-dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg
+cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
+./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub
 # Only downloads:
 #   - Files that weren't downloaded yet
 #   - Files that were partially downloaded (resumes from where it stopped)
@@ -760,8 +775,8 @@ touch /mnt/workspace/gutenberg/test.txt && rm /mnt/workspace/gutenberg/test.txt 
 If you want to keep the sync directory at `/mnt/workspace/gutenberg` but put the database elsewhere:
 
 ```bash
-# Create config
-dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- config init
+# Create config (from project root)
+./publish/gutenberg-sync config init
 
 # Edit config.json to add:
 {
@@ -834,7 +849,7 @@ The web application provides the following API endpoints:
 - `POST /api/Api/search` - Search the catalog (request body: `{ query, author, language, limit, offset }`)
 - `POST /api/Api/sync/start` - Start a sync operation
 - `POST /api/Api/epub/copy` - Copy an EPUB file (request body: `{ bookId, destinationPath }`)
-- `GET /api/Api/browse?path=<directory>` - Browse directories (limited to `/home/jfinlon`)
+- `GET /api/Api/browse?path=<directory>` - Browse directories (limited to workspace directory)
 
 **SignalR Hub:**
 - `/hubs/sync` - Real-time sync progress updates

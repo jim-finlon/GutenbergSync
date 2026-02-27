@@ -1,5 +1,29 @@
-screen -S gutenberg-sync --to create screen
-dotnet run --project src/GutenbergSync.Cli/GutenbergSync.Cli.csproj -- sync --preset text-epub --target-dir /mnt/workspace/gutenberg --auto-retry
+Quick start for GutenbergSync (run from project root: /mnt/workspace/repos/Projects/Tools/GutenbergSync)
 
-cntrl-ad to detach
-screen -R to resume screen
+Sync options for text + EPUB (~50GB):
+
+  A) Metadata only (builds catalog, quick):
+     ./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --metadata-only
+
+  B) Books separately (two-step: run A first, then this for content):
+     ./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry
+
+  C) Both at once (metadata + books in one command):
+     ./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry
+
+Presets: text-epub (text+EPUB), text-only (~15GB), full (~1TB)
+
+For long syncs (B or C), use screen:
+
+1. Create a screen session:
+   screen -S gutenberg-sync
+
+2. Run the sync (from project root):
+   cd /mnt/workspace/repos/Projects/Tools/GutenbergSync
+   ./publish/gutenberg-sync sync -t /mnt/workspace/gutenberg -p text-epub --auto-retry
+
+3. Detach from screen: Ctrl+A, then D
+
+4. Reattach: screen -r gutenberg-sync
+
+5. List sessions: screen -ls
